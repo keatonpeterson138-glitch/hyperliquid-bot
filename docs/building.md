@@ -1,10 +1,64 @@
 # Building the Installer
 
-Two paths: **GitHub Actions** (zero local setup, build runs on a hosted Windows VM) or **local Windows** (one PowerShell script).
+Three paths:
+1. **WSL → `/mnt/c/Projects/` sync + local build** (matches the existing
+   StructDraft workflow — fastest iteration).
+2. **GitHub Actions** (zero local setup, build runs on a hosted Windows VM).
+3. **Plain local Windows** (if you're not using WSL).
 
 ---
 
-## Path A — GitHub Actions (recommended)
+## Path A — WSL sync + local Windows build (recommended)
+
+This mirrors how you already build StructDraft: keep the working tree in
+WSL, rsync it to `/mnt/c/Projects/hyperliquid-bot/`, then run the
+Windows-native build from there.
+
+### One-time — install Windows prereqs
+
+1. [Python 3.12](https://www.python.org/downloads/windows/) — check *Add to PATH*.
+2. [Node.js 20 LTS](https://nodejs.org/en/download).
+3. [Rust via rustup](https://rustup.rs/). Let it install VS 2022 Build Tools if prompted.
+
+### Every build
+
+From WSL, in the repo root:
+
+```bash
+# Sync-only — picks up new commits / local changes.
+./scripts/sync_to_windows.sh
+
+# Or sync + build in one command.
+./scripts/sync_to_windows.sh --build
+```
+
+The `--build` flag invokes `powershell.exe` on the Windows side against
+`C:\Projects\hyperliquid-bot\scripts\build_windows.ps1`, which runs
+PyInstaller → copies the frozen sidecar into `ui/src-tauri/binaries/` →
+`npm install` → `npm run tauri:build`.
+
+Output:
+
+```
+C:\Projects\hyperliquid-bot\ui\src-tauri\target\release\bundle\msi\*.msi
+C:\Projects\hyperliquid-bot\ui\src-tauri\target\release\bundle\nsis\*.exe
+```
+
+Double-click either to install. First build takes ~15 min; subsequent
+builds with warm caches take ~2-3 min.
+
+### Preview the sync
+
+```bash
+./scripts/sync_to_windows.sh --dry-run
+```
+
+Excludes `.venv/`, `node_modules/`, `ui/src-tauri/target/`, `data/`,
+`__pycache__/`, PyInstaller output, and existing bundled sidecar binaries.
+
+---
+
+## Path B — GitHub Actions
 
 A Windows-runner workflow is already in the repo at `.github/workflows/build-windows.yml`. It handles PyInstaller bundling + the Tauri build + uploads the `.msi` and `.exe` installers as artifacts.
 
@@ -31,7 +85,7 @@ The workflow reads `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PA
 
 ---
 
-## Path B — Local Windows build
+## Path C — Plain local Windows build (no WSL)
 
 Prerequisites (one-time):
 1. [Python 3.12](https://www.python.org/downloads/windows/) — check "Add python.exe to PATH" during install.
