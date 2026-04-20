@@ -10,7 +10,6 @@ from typing import Any
 from backend.db.app_db import AppDB
 from backend.models.slot import Slot, SlotState
 
-
 _UNSET: Any = object()
 
 

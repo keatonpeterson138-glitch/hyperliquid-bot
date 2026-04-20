@@ -17,6 +17,9 @@ yfinance>=0.2.49
 pyarrow>=18.0.0
 duckdb>=1.1.0
 
+# Backend safety / Phase 2
+keyring>=25.0.0
+
 # Dev / test
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
