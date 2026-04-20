@@ -116,7 +116,7 @@ def _align_timestamp_columns(df: pd.DataFrame, schema: pa.Schema) -> pd.DataFram
     for field in schema:
         if not pa.types.is_timestamp(field.type):
             continue
-        if field.unit != "ms":
+        if field.type.unit != "ms":
             continue
         if field.name not in result.columns:
             continue
