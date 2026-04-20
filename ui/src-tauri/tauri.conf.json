@@ -39,9 +39,6 @@
     ],
     "externalBin": [
       "binaries/backend-sidecar"
-    ],
-    "resources": [
-      "resources/*"
     ]
   }
 }

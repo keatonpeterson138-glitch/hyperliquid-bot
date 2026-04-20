@@ -20,6 +20,12 @@ duckdb>=1.1.0
 # Backend safety / Phase 2
 keyring>=25.0.0
 
+# ML pipeline (Phase 10)
+scikit-learn>=1.5.0
+joblib>=1.4.0
+# xgboost is optional at training time — enable if you want the xgb_cls family.
+# xgboost>=2.0.0
+
 # Dev / test
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

@@ -36,8 +36,11 @@ export function SettingsPage() {
     setPending((p) => ({ ...p, [key]: value }));
   };
 
-  const effective = (key: keyof AppSettings) =>
-    key in pending ? pending[key] : settingsState?.[key];
+  function effective<K extends keyof AppSettings>(key: K): AppSettings[K] | undefined {
+    return (
+      key in pending ? (pending as AppSettings)[key] : settingsState?.[key]
+    ) as AppSettings[K] | undefined;
+  }
 
   const save = async () => {
     setSaving(true);
