@@ -27,11 +27,13 @@ from backend.api import (
     candles,
     health,
 )
+from backend.api import credentials as credentials_api
 from backend.api import killswitch as killswitch_api
 from backend.api import logs as logs_api
 from backend.api import markets as markets_api
 from backend.api import markups as markups_api
 from backend.api import models as models_api
+from backend.api import news as news_api
 from backend.api import notes as notes_api
 from backend.api import orders as orders_api
 from backend.api import outcomes as outcomes_api
@@ -147,6 +149,22 @@ def _wire_services(app: FastAPI) -> None:
     live_market.start_background_poll()
     app.state.live_market = live_market
 
+    # Credentials store — third-party API keys (Binance, Alpha Vantage,
+    # etc.); Hyperliquid private keys remain in KeyVault.
+    from backend.services.credentials_store import CredentialsStore
+    credentials_store = CredentialsStore(db)
+
+    # News monitor — RSS + CryptoPanic poller. Kept off by default in
+    # dev to avoid noisy logs; the Dashboard panel's first GET lazy-
+    # starts it on demand.
+    from core.news_monitor import NewsMonitor
+    news_monitor = NewsMonitor(poll_interval=60)
+    try:
+        news_monitor.start()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("news monitor failed to start: %s", exc)
+    app.state.news_monitor = news_monitor
+
     order_repo = OrderRepository(db)
     # Gateway stays None in dev until the vault is unlocked and a real
     # exchange client is constructed. OrderService accepts None and marks
@@ -182,6 +200,8 @@ def _wire_services(app: FastAPI) -> None:
     if backfill_service is not None:
         app.dependency_overrides[candles.get_backfill_service] = lambda: backfill_service
     app.dependency_overrides[markets_api.get_live_market] = lambda: live_market
+    app.dependency_overrides[credentials_api.get_credentials_store] = lambda: credentials_store
+    app.dependency_overrides[news_api.get_news_monitor] = lambda: news_monitor
     app.dependency_overrides[analog_api.get_analog_engine] = lambda: analog_engine
     app.dependency_overrides[models_api.get_model_registry] = lambda: model_registry
     app.dependency_overrides[settings_api.get_settings_store] = lambda: settings_store
@@ -248,6 +268,8 @@ def create_app() -> FastAPI:
     app.include_router(wallet_api.router)
     app.include_router(logs_api.router)
     app.include_router(markets_api.router)
+    app.include_router(credentials_api.router)
+    app.include_router(news_api.router)
     app.include_router(stream_api.router)
     return app
 

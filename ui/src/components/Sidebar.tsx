@@ -6,6 +6,7 @@ const NAV: Array<{ to: string; label: string; group?: string }> = [
   { to: "/charts", label: "Charts" },
   { to: "/outcomes", label: "Outcomes" },
   { to: "/slots", label: "Slots" },
+  { to: "/data", label: "Data Lab", group: "research" },
   { to: "/universe", label: "Universe", group: "research" },
   { to: "/research", label: "Research", group: "research" },
   { to: "/backtest", label: "Backtest", group: "research" },
@@ -14,6 +15,7 @@ const NAV: Array<{ to: string; label: string; group?: string }> = [
   { to: "/notes", label: "Notes", group: "other" },
   { to: "/audit", label: "Audit", group: "other" },
   { to: "/vault", label: "Vault", group: "other" },
+  { to: "/apikeys", label: "API Keys", group: "other" },
   { to: "/settings", label: "Settings", group: "other" },
 ];
 

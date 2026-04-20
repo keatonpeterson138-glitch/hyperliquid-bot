@@ -52,9 +52,43 @@ def _xgb_factory(**kwargs: Any) -> Any:
     )
 
 
+def _lgbm_factory(**kwargs: Any) -> Any:
+    """LightGBM classifier. Often beats XGB on tabular; much faster to
+    tune. Optional dep — import lazily so the backend works without it."""
+    try:
+        import lightgbm as lgb
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "lightgbm not installed — add `lightgbm` to requirements.txt "
+            "or pick a different family."
+        ) from exc
+    return lgb.LGBMClassifier(
+        n_estimators=kwargs.pop("n_estimators", 300),
+        max_depth=kwargs.pop("max_depth", -1),
+        num_leaves=kwargs.pop("num_leaves", 31),
+        learning_rate=kwargs.pop("learning_rate", 0.05),
+        objective="binary",
+        verbosity=-1,
+        **kwargs,
+    )
+
+
+def _rf_factory(**kwargs: Any) -> Any:
+    from sklearn.ensemble import RandomForestClassifier
+    return RandomForestClassifier(
+        n_estimators=kwargs.pop("n_estimators", 300),
+        max_depth=kwargs.pop("max_depth", None),
+        min_samples_leaf=kwargs.pop("min_samples_leaf", 20),
+        n_jobs=kwargs.pop("n_jobs", -1),
+        **kwargs,
+    )
+
+
 MODEL_FACTORIES: dict[str, ModelFactory] = {
     "logreg": _logreg_factory,
     "xgb_cls": _xgb_factory,
+    "lgbm_cls": _lgbm_factory,
+    "rf_cls": _rf_factory,
 }
 
 
@@ -85,6 +119,8 @@ class TrainingResult:
     features: list[str]
     label: str
     n_samples: int
+    feature_importance: dict[str, float] = field(default_factory=dict)
+    permutation_importance: dict[str, float] = field(default_factory=dict)
 
 
 def train(bars: pd.DataFrame, cfg: TrainingConfig) -> TrainingResult:
@@ -153,6 +189,9 @@ def train(bars: pd.DataFrame, cfg: TrainingConfig) -> TrainingResult:
     final_model = factory(**cfg.model_kwargs)
     final_model.fit(X, y)
 
+    importance = _extract_importance(final_model, list(X.columns))
+    perm_importance = _permutation_importance(final_model, X, y)
+
     return TrainingResult(
         model=final_model,
         metrics=aggregated,
@@ -160,6 +199,8 @@ def train(bars: pd.DataFrame, cfg: TrainingConfig) -> TrainingResult:
         features=list(X.columns),
         label=cfg.labeler.__name__,
         n_samples=len(y),
+        feature_importance=importance,
+        permutation_importance=perm_importance,
     )
 
 
@@ -170,3 +211,67 @@ def _predict_proba(model: Any, X: pd.DataFrame) -> np.ndarray:
         raw = model.decision_function(X)
         return 1.0 / (1.0 + np.exp(-raw))
     raise ValueError("model exposes neither predict_proba nor decision_function")
+
+
+def _extract_importance(model: Any, feature_names: list[str]) -> dict[str, float]:
+    """Model-native feature importance (gain / coefficient). Returns an
+    empty dict if the family doesn't expose anything."""
+    # Sklearn Pipeline — look at the final estimator.
+    est = model
+    if hasattr(model, "named_steps"):
+        est = list(model.named_steps.values())[-1]
+
+    # Tree ensembles.
+    if hasattr(est, "feature_importances_"):
+        fi = np.asarray(est.feature_importances_, dtype=float)
+        total = float(fi.sum())
+        if total > 0:
+            fi = fi / total
+        return dict(zip(feature_names, fi.tolist(), strict=False))
+
+    # Linear / logistic.
+    if hasattr(est, "coef_"):
+        coef = np.asarray(est.coef_, dtype=float)
+        if coef.ndim == 2:
+            coef = coef[0]
+        mag = np.abs(coef)
+        total = float(mag.sum())
+        if total > 0:
+            mag = mag / total
+        return dict(zip(feature_names, mag.tolist(), strict=False))
+
+    return {}
+
+
+def _permutation_importance(model: Any, X: pd.DataFrame, y: pd.Series, *, n_repeats: int = 3) -> dict[str, float]:
+    """Cheap permutation importance: shuffle each column, measure accuracy
+    drop. Keeps sample size small to avoid blowing up training time."""
+    try:
+        from sklearn.metrics import accuracy_score
+    except ImportError:
+        return {}
+    # Subsample for speed if X is large.
+    if len(X) > 5_000:
+        idx = np.random.default_rng(42).choice(len(X), 5_000, replace=False)
+        X = X.iloc[idx]
+        y = y.iloc[idx]
+    try:
+        base_pred = (_predict_proba(model, X) >= 0.5).astype(int)
+        base = accuracy_score(y, base_pred)
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[str, float] = {}
+    rng = np.random.default_rng(17)
+    for col in X.columns:
+        drops: list[float] = []
+        for _ in range(n_repeats):
+            shuffled = X.copy()
+            shuffled[col] = rng.permutation(shuffled[col].to_numpy())
+            try:
+                pred = (_predict_proba(model, shuffled) >= 0.5).astype(int)
+                acc = accuracy_score(y, pred)
+                drops.append(base - acc)
+            except Exception:  # noqa: BLE001
+                drops.append(0.0)
+        out[col] = float(np.mean(drops))
+    return out

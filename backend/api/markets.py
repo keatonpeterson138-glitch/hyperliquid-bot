@@ -80,6 +80,69 @@ def get_meta(svc: LiveDep) -> MetaResponse:
     return MetaResponse(raw=data if isinstance(data, dict) else {"universe": data})
 
 
+class OrderBookLevel(BaseModel):
+    price: float
+    size: float
+
+
+class OrderBookResponse(BaseModel):
+    symbol: str
+    bids: list[OrderBookLevel] = Field(default_factory=list)
+    asks: list[OrderBookLevel] = Field(default_factory=list)
+    timestamp: int | None = None
+
+
+@router.get("/markets/orderbook", response_model=OrderBookResponse)
+def get_orderbook(
+    svc: LiveDep,
+    symbol: Annotated[str, Query(min_length=1)],
+    depth: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> OrderBookResponse:
+    """Hyperliquid L2 snapshot, truncated to ``depth`` levels per side."""
+    try:
+        snap = svc.l2_book(symbol)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"orderbook fetch failed: {exc}") from exc
+    return OrderBookResponse(
+        symbol=symbol,
+        bids=[OrderBookLevel(price=p, size=s) for p, s in snap.get("bids", [])][:depth],
+        asks=[OrderBookLevel(price=p, size=s) for p, s in snap.get("asks", [])][:depth],
+        timestamp=snap.get("timestamp"),
+    )
+
+
+class TradePrint(BaseModel):
+    coin: str
+    side: str
+    price: float
+    size: float
+    time_ms: int
+
+
+class TradesResponse(BaseModel):
+    symbol: str
+    trades: list[TradePrint] = Field(default_factory=list)
+
+
+@router.get("/markets/trades", response_model=TradesResponse)
+def get_trades(
+    svc: LiveDep,
+    symbol: Annotated[str, Query(min_length=1)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> TradesResponse:
+    try:
+        trades = svc.recent_trades(symbol, limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"trades fetch failed: {exc}") from exc
+    return TradesResponse(
+        symbol=symbol,
+        trades=[
+            TradePrint(coin=t["coin"], side=t["side"], price=t["price"], size=t["size"], time_ms=t["time_ms"])
+            for t in trades
+        ],
+    )
+
+
 @router.get("/markets/funding", response_model=FundingResponse)
 def get_funding(
     svc: LiveDep,

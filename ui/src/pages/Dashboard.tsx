@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { NewsPanel } from "../components/NewsPanel";
 import { TickerBar } from "../components/TickerBar";
 import { health, slots as slotsApi } from "../api/endpoints";
 import { useStream } from "../hooks/useStream";
@@ -45,6 +46,10 @@ export function Dashboard() {
           <Stat label="Enabled" value={enabledCount.toString()} />
           <Stat label="In position" value={slots.filter((s) => s.state?.current_position).length.toString()} />
         </div>
+      </section>
+
+      <section className="card">
+        <NewsPanel />
       </section>
 
       <section className="card">

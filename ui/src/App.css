@@ -322,6 +322,45 @@ select, input {
   flex-wrap: wrap;
 }
 
+/* ── Feature-importance bars ────────────────────────────────────── */
+
+.importance-bars { display: flex; flex-direction: column; gap: 4px; }
+.importance-bar {
+  display: grid;
+  grid-template-columns: 180px 1fr 70px;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+.importance-bar__name { color: var(--fg-dim); text-align: right; }
+.importance-bar__track { background: var(--surface-2); border-radius: 3px; height: 14px; }
+.importance-bar__fill { background: var(--accent); height: 100%; border-radius: 3px; }
+.importance-bar__val { text-align: right; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+
+/* ── News panel ─────────────────────────────────────────────────── */
+
+.news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }
+.news-item {
+  border-left: 3px solid var(--border);
+  background: var(--surface-2);
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.news-item.impact--critical { border-left-color: var(--err); }
+.news-item.impact--high     { border-left-color: var(--warn); }
+.news-item.impact--medium   { border-left-color: var(--accent); }
+.news-item.impact--low      { border-left-color: var(--border); }
+.news-item__head { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
+.news-item__head-link { color: var(--fg); text-decoration: none; display: block; line-height: 1.35; }
+.news-item__head-link:hover { color: var(--accent); }
+.impact-badge--critical { color: var(--err); border-color: var(--err); }
+.impact-badge--high     { color: var(--warn); border-color: var(--warn); }
+.impact-badge--medium   { color: var(--accent); border-color: var(--accent); }
+.sentiment--bullish { color: var(--ok); font-size: 10px; text-transform: uppercase; }
+.sentiment--bearish { color: var(--err); font-size: 10px; text-transform: uppercase; }
+.sentiment--neutral { color: var(--fg-dim); font-size: 10px; text-transform: uppercase; }
+
 /* ── Chart grid + tile ──────────────────────────────────────────── */
 
 .chart-grid {

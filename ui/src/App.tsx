@@ -3,10 +3,12 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
 import { AnalogPage } from "./pages/AnalogPage";
+import { APIKeysPage } from "./pages/APIKeysPage";
 import { AuditPage } from "./pages/AuditPage";
 import { BacktestPage } from "./pages/BacktestPage";
 import { ChartsPage } from "./pages/Charts";
 import { Dashboard } from "./pages/Dashboard";
+import { DataLabPage } from "./pages/DataLabPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { OutcomesPage } from "./pages/Outcomes";
@@ -30,6 +32,7 @@ export default function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/wallet" element={<WalletPage />} />
               <Route path="/charts" element={<ChartsPage />} />
+              <Route path="/data" element={<DataLabPage />} />
               <Route path="/slots" element={<SlotsPage />} />
               <Route path="/universe" element={<UniversePage />} />
               <Route path="/outcomes" element={<OutcomesPage />} />
@@ -40,6 +43,7 @@ export default function App() {
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/vault" element={<VaultPage />} />
+              <Route path="/apikeys" element={<APIKeysPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </div>

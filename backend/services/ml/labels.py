@@ -72,10 +72,64 @@ def vol_adjusted_return(bars: pd.DataFrame, n: int = 1, vol_window: int = 20) ->
     return fwd / vol
 
 
+def triple_barrier_atr(
+    bars: pd.DataFrame,
+    *,
+    pt_mult: float = 2.0,
+    sl_mult: float = 1.0,
+    horizon: int = 24,
+    atr_window: int = 14,
+) -> pd.Series:
+    """Volatility-aware triple barrier (Prado AFML ch. 3).
+
+    Instead of fixed ``pt``/``sl`` percentages, the barriers sit at
+    ``pt_mult * ATR(n)`` above and ``sl_mult * ATR(n)`` below the entry,
+    scaled to current volatility. A 2% barrier in a calm market becomes
+    a 6% barrier in a volatile market — same decision surface.
+
+    +1 profit-target hit first, -1 stop-loss hit first, 0 neither within
+    ``horizon`` bars. Last ``horizon`` rows are NaN.
+    """
+    close = bars["close"].to_numpy(dtype=float)
+    high = bars["high"].to_numpy(dtype=float)
+    low = bars["low"].to_numpy(dtype=float)
+    n = len(close)
+    out = np.full(n, np.nan)
+
+    # ATR via the same TR formula as features.atr().
+    tr = np.maximum.reduce([
+        high - low,
+        np.abs(high - np.concatenate(([np.nan], close[:-1]))),
+        np.abs(low - np.concatenate(([np.nan], close[:-1]))),
+    ])
+    atr_series = pd.Series(tr).rolling(atr_window).mean().to_numpy()
+
+    for i in range(n - horizon):
+        entry = close[i]
+        a = atr_series[i]
+        if not np.isfinite(a) or a <= 0 or entry <= 0:
+            continue
+        upper = entry + pt_mult * a
+        lower = entry - sl_mult * a
+        future = close[i + 1: i + 1 + horizon]
+        hit_up = np.where(future >= upper)[0]
+        hit_dn = np.where(future <= lower)[0]
+        t_up = hit_up[0] if len(hit_up) else horizon + 1
+        t_dn = hit_dn[0] if len(hit_dn) else horizon + 1
+        if t_up < t_dn:
+            out[i] = 1
+        elif t_dn < t_up:
+            out[i] = -1
+        else:
+            out[i] = 0
+    return pd.Series(out, index=bars.index, name=f"tb_atr_{pt_mult}_{sl_mult}_{horizon}")
+
+
 LABELERS: dict[str, Labeler] = {
     "forward_return": forward_return_n,
     "direction": direction_n,
     "triple_barrier": triple_barrier,
+    "triple_barrier_atr": triple_barrier_atr,
     "vol_adjusted_return": vol_adjusted_return,
 }
 

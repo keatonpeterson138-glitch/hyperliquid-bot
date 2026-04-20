@@ -117,6 +117,52 @@ class LiveMarketService:
             self._funding[symbol] = (now, rows)
         return rows
 
+    def l2_book(self, symbol: str) -> dict[str, Any]:
+        """Current L2 order-book snapshot. Hyperliquid's ``l2Book`` info
+        endpoint returns ``{levels: [[bids], [asks]]}`` — we normalise
+        to ``{bids: [[px, sz]], asks: [...]}`` (bids high-first, asks low-first)."""
+        data = self._post({"type": "l2Book", "coin": symbol})
+        levels = data.get("levels") if isinstance(data, dict) else None
+        bids: list[list[float]] = []
+        asks: list[list[float]] = []
+        if isinstance(levels, list) and len(levels) >= 2:
+            for lvl in levels[0] or []:
+                try:
+                    bids.append([float(lvl["px"]), float(lvl["sz"])])
+                except (KeyError, TypeError, ValueError):
+                    continue
+            for lvl in levels[1] or []:
+                try:
+                    asks.append([float(lvl["px"]), float(lvl["sz"])])
+                except (KeyError, TypeError, ValueError):
+                    continue
+        return {
+            "symbol": symbol,
+            "bids": bids,
+            "asks": asks,
+            "timestamp": data.get("time") if isinstance(data, dict) else None,
+        }
+
+    def recent_trades(self, symbol: str, limit: int = 100) -> list[dict[str, Any]]:
+        """Recent prints. Hyperliquid ``recentTrades`` returns
+        ``[{coin, side, px, sz, hash, time, tid}, ...]``."""
+        data = self._post({"type": "recentTrades", "coin": symbol})
+        trades = data if isinstance(data, list) else []
+        out: list[dict[str, Any]] = []
+        for t in trades[:limit]:
+            try:
+                out.append({
+                    "coin": str(t.get("coin", symbol)),
+                    "side": str(t.get("side", "")),
+                    "price": float(t.get("px", 0)),
+                    "size": float(t.get("sz", 0)),
+                    "time_ms": int(t.get("time", 0)),
+                    "hash": str(t.get("hash", "")),
+                })
+            except (TypeError, ValueError):
+                continue
+        return out
+
     # ── internals ─────────────────────────────────────────────────────
 
     def _mids_snapshot(self) -> dict[str, float]:

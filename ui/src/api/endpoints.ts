@@ -154,6 +154,17 @@ export interface Ticker {
   as_of: string;
 }
 
+export interface OrderBookLevel { price: number; size: number }
+export interface OrderBookResponse {
+  symbol: string;
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  timestamp: number | null;
+}
+export interface TradePrint {
+  coin: string; side: string; price: number; size: number; time_ms: number;
+}
+
 export const markets = {
   tickers: (symbols: string[] = ["BTC", "ETH", "SOL", "HYPE"]) =>
     api.get<{ tickers: Ticker[] }>(
@@ -166,6 +177,59 @@ export const markets = {
       symbol: string;
       rows: Array<{ coin: string; funding_rate: number; premium: number | null; timestamp: string }>;
     }>(`/markets/funding?symbol=${encodeURIComponent(symbol)}&lookback_hours=${lookback_hours}`),
+  orderbook: (symbol: string, depth = 20) =>
+    api.get<OrderBookResponse>(
+      `/markets/orderbook?symbol=${encodeURIComponent(symbol)}&depth=${depth}`,
+    ),
+  trades: (symbol: string, limit = 100) =>
+    api.get<{ symbol: string; trades: TradePrint[] }>(
+      `/markets/trades?symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
+    ),
+};
+
+export interface Credential {
+  id: string;
+  provider: string;
+  label: string | null;
+  api_key: string | null;
+  api_secret: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export const credentials = {
+  list: (provider?: string) => {
+    const q = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    return api.get<Credential[]>(`/credentials${q}`);
+  },
+  create: (body: { provider: string; label?: string; api_key?: string; api_secret?: string; metadata?: Record<string, unknown> }) =>
+    api.post<Credential>("/credentials", body),
+  update: (id: string, patch: Partial<{ label: string; api_key: string; api_secret: string; metadata: Record<string, unknown> }>) =>
+    api.patch<Credential>(`/credentials/${id}`, patch),
+  delete: (id: string) => api.del<void>(`/credentials/${id}`),
+};
+
+export interface NewsItem {
+  uid: string;
+  headline: string;
+  source: string;
+  url: string;
+  published: string;
+  impact: string;
+  sentiment: string;
+  matched_keywords: string[];
+}
+
+export const news = {
+  latest: (limit = 50, min_impact: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" = "LOW") =>
+    api.get<{ items: NewsItem[]; sentiment_bias: string }>(
+      `/news/latest?limit=${limit}&min_impact=${min_impact}`,
+    ),
+  critical: (since_minutes = 60) =>
+    api.get<{ items: NewsItem[]; sentiment_bias: string }>(
+      `/news/critical?since_minutes=${since_minutes}`,
+    ),
 };
 
 export const outcomes = {
