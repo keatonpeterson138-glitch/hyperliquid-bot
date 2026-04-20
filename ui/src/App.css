@@ -322,6 +322,63 @@ select, input {
   flex-wrap: wrap;
 }
 
+/* ── Chart grid + tile ──────────────────────────────────────────── */
+
+.chart-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.chart-grid--1 { grid-template-columns: 1fr; }
+.chart-grid--2 { grid-template-columns: 1fr 1fr; }
+.chart-grid--4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.chart-grid--8 { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; }
+
+.chart-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.chart-tile__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 11px;
+}
+.chart-tile__sym { min-width: 92px; font-weight: 600; }
+.chart-tile__iv  { min-width: 68px; }
+.chart-tile__stats {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.chart-tile__price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+.chart-tile__live { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.chart-tile__close {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--fg-dim);
+}
+.chart-tile__close:hover { color: var(--err); border-color: var(--err); }
+.chart-tile__chart { flex: 1; min-height: 0; }
+
 /* ── Live ticker bar ─────────────────────────────────────────────── */
 
 .ticker-card { padding: 10px 16px; }
