@@ -176,8 +176,13 @@ class TestBackfillEndpoint:
         assert body["errors"] == []
 
     def test_bad_interval_rejected(self, tmp_path) -> None:
+        # Pydantic rejects bad intervals before touching the service; supply
+        # a harmless stub to prove validation runs first regardless of deps.
+        stub_service = BackfillService(
+            SourceRouter([_FakeSource(frame=None)]), data_root=tmp_path
+        )
         app = create_app()
-        # Even without service override, validation fires first.
+        app.dependency_overrides[candles_api.get_backfill_service] = lambda: stub_service
         client = TestClient(app)
         resp = client.post(
             "/backfill",

@@ -22,12 +22,13 @@ class RecordingSource:
     name: str
     _frame: CandleFrame
     call_log: list[tuple[str, str, datetime, datetime]]
+    _earliest: datetime | None = None
 
     def supports(self, symbol: str, interval: str) -> bool:  # noqa: ARG002
         return True
 
     def earliest_available(self, symbol: str, interval: str) -> datetime | None:  # noqa: ARG002
-        return None
+        return self._earliest
 
     def fetch_candles(self, symbol, interval, start, end):
         self.call_log.append((symbol, interval, start, end))
@@ -96,15 +97,23 @@ class TestBackfillRun:
         assert result == 0
 
     def test_walks_plan_and_calls_append_per_slice(self, tmp_path) -> None:
-        src_a = RecordingSource(
-            "binance", _frame_with("BTC", "1h", "binance", 3), call_log=[]
+        # Two sources with distinct earliest dates so the router plan produces
+        # two slices (Binance fills older → Hyperliquid fills recent).
+        src_hl = RecordingSource(
+            "hyperliquid",
+            _frame_with("BTC", "1h", "hyperliquid", 2),
+            call_log=[],
         )
-        src_b = RecordingSource(
-            "hyperliquid", _frame_with("BTC", "1h", "hyperliquid", 2), call_log=[]
+        src_hl._earliest = datetime(2024, 1, 1, 12, tzinfo=UTC)  # hl starts mid-window
+        src_bn = RecordingSource(
+            "binance",
+            _frame_with("BTC", "1h", "binance", 3),
+            call_log=[],
         )
+        src_bn._earliest = datetime(2024, 1, 1, 0, tzinfo=UTC)  # bn covers back further
 
         def factory():
-            return SourceRouter([src_b, src_a])  # hyperliquid first-priority
+            return SourceRouter([src_hl, src_bn])
 
         append_log: list[tuple[CandleFrame, Path]] = []
 
@@ -112,13 +121,17 @@ class TestBackfillRun:
             append_log.append((frame, data_root))
             return len(frame.bars)
 
-        args = _args(tmp_path)
+        args = _args(
+            tmp_path,
+            start=datetime(2024, 1, 1, 0, tzinfo=UTC),
+            end=datetime(2024, 1, 2, 0, tzinfo=UTC),
+        )
         result = run(args, router_factory=factory, append_fn=fake_append)
         assert result == 5
         assert len(append_log) == 2
         assert append_log[0][1] == tmp_path
-        assert len(src_a.call_log) == 1
-        assert len(src_b.call_log) == 1
+        assert len(src_hl.call_log) == 1
+        assert len(src_bn.call_log) == 1
 
     def test_empty_frames_dont_call_append(self, tmp_path) -> None:
         src = RecordingSource("binance", _empty_frame("BTC", "1h", "binance"), call_log=[])

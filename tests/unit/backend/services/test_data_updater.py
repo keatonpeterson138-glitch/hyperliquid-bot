@@ -73,13 +73,14 @@ class TestDataUpdater:
 
     def test_subsequent_tick_starts_after_latest_stored(self, tmp_path) -> None:
         now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=UTC)
-        # Seed the lake with some bars.
-        existing_ts = [now - timedelta(hours=i) for i in range(5, 0, -1)]
-        existing = _frame_with("BTC", "1h", "binance", existing_ts, [100, 101, 102, 103, 104])
+        # Seed the lake with some bars; last bar at now-2h so there's a real
+        # gap for the updater to fill.
+        existing_ts = [now - timedelta(hours=i) for i in range(5, 1, -1)]
+        existing = _frame_with("BTC", "1h", "binance", existing_ts, [100, 101, 102, 103])
         append_ohlcv(existing, data_root=tmp_path)
 
         # New tick brings in the next bar.
-        new_ts = [now - timedelta(minutes=5)]
+        new_ts = [now - timedelta(minutes=30)]
         src = FakeSource()
         src.frames_to_return = [_frame_with("BTC", "1h", "hyperliquid", new_ts, [105.0])]
         updater = DataUpdater(symbol="BTC", interval="1h", source=src, data_root=tmp_path)
@@ -87,7 +88,7 @@ class TestDataUpdater:
         n = updater.tick(now=now)
         assert n > 0
         symbol, interval, start, end = src.call_log[0]
-        # Start is roughly latest_stored + 1h.
+        # Start is roughly latest_stored + 1h = now - 1h.
         assert start >= now - timedelta(hours=1, minutes=10)
         assert start <= now
         # Latest now reflects the new bar.
