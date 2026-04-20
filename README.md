@@ -2,7 +2,7 @@
 
 Automated perpetual futures + prediction-market trading bot for [Hyperliquid](https://hyperliquid.xyz/), with configurable strategies, multi-slot position management, risk management, and real-time notifications.
 
-**Status:** Undergoing a platform overhaul. See [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) for the v1.0 roadmap.
+**Status:** v1.0 scope shipped — all 14 phases complete (Phases 0–13). 402 tests passing, ruff clean. Native cross-OS installer builds + final vault-gated exchange wiring are the remaining items before tagging the mainnet release. See [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) + [`internal_docs/PHASE_5p5_TO_12_PLAN.md`](internal_docs/PHASE_5p5_TO_12_PLAN.md) for the architecture, [`docs/getting_started.md`](docs/getting_started.md) for the user quickstart.
 
 ## Supported Markets
 

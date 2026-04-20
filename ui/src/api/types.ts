@@ -127,3 +127,37 @@ export type StreamEvent = {
   ts: string;
   type: string;
 } & Record<string, unknown>;
+
+export interface OutcomeTick {
+  timestamp: string;
+  price: number;
+  volume: number;
+  implied_prob: number;
+  best_bid: number | null;
+  best_ask: number | null;
+  event_id: string | null;
+  source: string | null;
+}
+
+export interface OutcomeTapeResponse {
+  market_id: string;
+  tick_count: number;
+  ticks: OutcomeTick[];
+}
+
+export interface OutcomeEdge {
+  market_id: string;
+  underlying: string | null;
+  target_price: number | null;
+  t_years: number | null;
+  spot: number | null;
+  vol_used: number | null;
+  vol_source: string | null;
+  theoretical_prob_yes: number | null;
+  theoretical_prob_no: number | null;
+  market_yes: number | null;
+  market_no: number | null;
+  edge_yes: number | null;
+  edge_no: number | null;
+  implied_vol: number | null;
+}

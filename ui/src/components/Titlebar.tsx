@@ -1,18 +1,41 @@
-import { useEffect, useState } from "react";
+// Titlebar — app-wide top bar.
+//
+// Left: backend status dot + menu ribbon (File, Edit, View, Settings, Help).
+// Center: kill-switch banner when active.
+// Right: kill switch button + notifications bell.
+//
+// Native Tauri menus land in Phase 13 hardening; this is an in-DOM
+// fallback that works identically in dev (Vite-only) and prod (Tauri).
+
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { health, killswitch as ks } from "../api/endpoints";
 import type { KillSwitchStatus } from "../api/types";
 
+interface MenuItem {
+  label: string;
+  onClick?: () => void;
+  shortcut?: string;
+  disabled?: boolean;
+  separator?: boolean;
+}
+
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
+
 export function Titlebar() {
+  const navigate = useNavigate();
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
   const [killStatus, setKillStatus] = useState<KillSwitchStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    health
-      .get()
-      .then(() => setBackendOk(true))
-      .catch(() => setBackendOk(false));
+    health.get().then(() => setBackendOk(true)).catch(() => setBackendOk(false));
     ks.status().then(setKillStatus).catch(() => undefined);
     const id = setInterval(() => {
       ks.status().then(setKillStatus).catch(() => undefined);
@@ -20,9 +43,17 @@ export function Titlebar() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target as Node)) setOpenMenu(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, []);
+
   const handleKill = async () => {
-    if (!confirm("FLATTEN ALL POSITIONS AND CANCEL ALL ORDERS?\nType-confirm in next prompt."))
-      return;
+    if (!confirm("FLATTEN ALL POSITIONS AND CANCEL ALL ORDERS?")) return;
     const phrase = prompt("Type KILL to confirm:");
     if (phrase !== "KILL") {
       alert("Confirmation phrase mismatch — aborting.");
@@ -31,13 +62,13 @@ export function Titlebar() {
     setBusy(true);
     try {
       const report = await ks.activate();
-      const msg =
+      alert(
         `Killed.\n` +
-        `Orders cancelled: ${report.orders_cancelled.length}\n` +
-        `Positions closed: ${report.positions_closed.length}\n` +
-        `Slots disabled: ${report.slots_disabled}\n` +
-        `Errors: ${report.errors.length}`;
-      alert(msg);
+          `Orders cancelled: ${report.orders_cancelled.length}\n` +
+          `Positions closed: ${report.positions_closed.length}\n` +
+          `Slots disabled: ${report.slots_disabled}\n` +
+          `Errors: ${report.errors.length}`,
+      );
     } catch (e) {
       alert(`Kill switch failed: ${(e as Error).message}`);
     } finally {
@@ -45,6 +76,71 @@ export function Titlebar() {
       ks.status().then(setKillStatus).catch(() => undefined);
     }
   };
+
+  const todo = (what: string) => () =>
+    alert(`${what} — coming in Phase 13 polish (see internal_docs/PHASE_5p5_TO_12_PLAN.md §4.6)`);
+
+  const groups: MenuGroup[] = [
+    {
+      label: "File",
+      items: [
+        { label: "New Layout", shortcut: "Ctrl+N", onClick: todo("New Layout") },
+        { label: "Open Layout…", shortcut: "Ctrl+O", onClick: todo("Open Layout") },
+        { label: "Save Layout", shortcut: "Ctrl+S", onClick: todo("Save Layout") },
+        { label: "", separator: true },
+        { label: "Save Chart as PNG…", onClick: todo("Save chart as PNG") },
+        { label: "Export Candles CSV…", onClick: todo("Export candles") },
+        { label: "Export Backtest CSV…", onClick: todo("Export backtest") },
+        { label: "Print Chart…", shortcut: "Ctrl+P", onClick: todo("Print chart") },
+        { label: "", separator: true },
+        { label: "Exit", onClick: () => window.close() },
+      ],
+    },
+    {
+      label: "Edit",
+      items: [
+        { label: "Undo", shortcut: "Ctrl+Z", onClick: todo("Undo") },
+        { label: "Redo", shortcut: "Ctrl+Shift+Z", onClick: todo("Redo") },
+        { label: "", separator: true },
+        { label: "Find symbol", shortcut: "Ctrl+F", onClick: todo("Find symbol") },
+      ],
+    },
+    {
+      label: "View",
+      items: [
+        { label: "Dashboard", onClick: () => navigate("/dashboard") },
+        { label: "Charts", onClick: () => navigate("/charts") },
+        { label: "Outcomes", onClick: () => navigate("/outcomes") },
+        { label: "", separator: true },
+        { label: "Light / Dark theme", onClick: todo("Toggle theme") },
+      ],
+    },
+    {
+      label: "Tools",
+      items: [
+        { label: "Backtest Lab", onClick: () => navigate("/backtest") },
+        { label: "Research", onClick: () => navigate("/research") },
+        { label: "Analog Search", onClick: () => navigate("/analog") },
+        { label: "Training Lab", onClick: () => navigate("/models") },
+        { label: "Notes", onClick: () => navigate("/notes") },
+      ],
+    },
+    {
+      label: "Settings",
+      items: [
+        { label: "Settings…", shortcut: "Ctrl+,", onClick: () => navigate("/settings") },
+        { label: "Vault", onClick: () => navigate("/vault") },
+      ],
+    },
+    {
+      label: "Help",
+      items: [
+        { label: "Keyboard shortcuts", onClick: todo("Shortcuts") },
+        { label: "Documentation", onClick: todo("Docs") },
+        { label: "About", onClick: todo("About") },
+      ],
+    },
+  ];
 
   const killActive = killStatus?.active ?? false;
   const indicatorClass =
@@ -58,9 +154,44 @@ export function Titlebar() {
     <header className="titlebar">
       <div className="titlebar__left">
         <span className={indicatorClass} />
-        <span className="titlebar__status-text">
-          backend {backendOk === null ? "…" : backendOk ? "ok" : "down"}
-        </span>
+        <span className="titlebar__status-text">backend {backendOk === null ? "…" : backendOk ? "ok" : "down"}</span>
+        <nav className="titlebar__menubar" ref={menuRef}>
+          {groups.map((g) => (
+            <div
+              key={g.label}
+              className={`menu ${openMenu === g.label ? "menu--open" : ""}`}
+            >
+              <button
+                className="menu__trigger"
+                onClick={() => setOpenMenu(openMenu === g.label ? null : g.label)}
+              >
+                {g.label}
+              </button>
+              {openMenu === g.label && (
+                <div className="menu__dropdown">
+                  {g.items.map((it, i) =>
+                    it.separator ? (
+                      <div key={`sep-${i}`} className="menu__sep" />
+                    ) : (
+                      <button
+                        key={it.label}
+                        className="menu__item"
+                        disabled={it.disabled}
+                        onClick={() => {
+                          setOpenMenu(null);
+                          it.onClick?.();
+                        }}
+                      >
+                        <span>{it.label}</span>
+                        {it.shortcut && <span className="menu__shortcut">{it.shortcut}</span>}
+                      </button>
+                    ),
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
       </div>
       <div className="titlebar__center">
         {killActive ? (

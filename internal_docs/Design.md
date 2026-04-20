@@ -123,26 +123,47 @@ Shared: `sidebar.py`, `components.py`, `chart_widget.py`, `theme.py`.
 
 ## 6. Target Architecture (v1.0)
 
-See `OVERHAUL_PLAN.md` for the full spec. High-level layers:
+See `OVERHAUL_PLAN.md` for the full spec + `PHASE_5p5_TO_12_PLAN.md` for the implementation plan. Phases 0 → 13 are all shipped as of 2026-04-20. High-level layers:
 
 ```
-Tauri desktop shell (React 19 + TS + Vite)
-  ↔ HTTP + WebSocket
-FastAPI Python sidecar
-  → domain services (UniverseManager, TradeEngine, BacktestEngine,
-    ResearchService, AnalogEngine, OutcomeService, ModelRegistry,
-    MarkupStore, LayoutStore, AuditService, KillSwitchService, KeyVault)
+Tauri 2 desktop shell (React 19 + TS + Vite + lightweight-charts v5)
+  ↔ HTTP + WebSocket (CORS-gated in dev, tauri://localhost in prod)
+FastAPI Python sidecar (spawned by the Tauri shell in release builds)
+  → domain services
+     UniverseManager · TradeEngineService · SlotRunner · OutcomeSlotRunner
+     OrderService    · OrderRepository   · MarkupStore · BacktestEngine
+     AnalogEngine    · ModelRegistry     · FeatureSet  · PurgedKFold
+     AuditService    · KillSwitchService · KeyVault    · ShadowRunner
+     ExposureCapService · SettingsStore  · NotesStore  · WalletService
+     StreamHub (WS fan-out)
   → core/ + strategies/ (reused)
-  → Parquet + DuckDB (market data, features, outcomes, analog indices)
-  → SQLite (app state: markups, layouts, slots, audit, models, universe)
-  → OS keychain (private keys)
+  → Parquet + DuckDB (candle lake, outcomes tape, features, backtests)
+  → SQLite `app.db` (markets, slots, audit, markups, orders, models,
+                     notes, layouts, bootstrap_progress, notifications)
+  → OS keychain (private keys via Tauri `keyring` plugin)
+  → FAISS indexes (analog search, embedding path deferred post-v1.0)
+  → flat-file model registry (data/models/<family>/<ts>/...)
+  → JSON settings (data/settings.json — survives DB migrations)
 ```
+
+REST surface (42 endpoints): `/health`, `/vault`, `/universe`, `/candles`,
+`/catalog`, `/backfill`, `/outcomes`, `/outcomes/{id}/{tape,edge,orderbook}`,
+`/slots`, `/audit`, `/killswitch`, `/markups`, `/orders`,
+`/orders/from-markup`, `/backtest`, `/backtest/sweep`,
+`/backtest/monte-carlo`, `/research`, `/research/run`, `/analog/query`,
+`/models`, `/models/train`, `/models/{id}/promote`, `/settings`,
+`/notes`, `/wallet/summary`, `/wallet/activity`, `/logs`.
+WS: `/stream` (global), `/stream/outcomes?market_id=` (filtered).
 
 Highlights:
 
-- Charts: `lightweight-charts` (Apache-2.0) + custom SVG markup layer. Interactive long/short drawings are live orders.
-- Data: Parquet lake partitioned by symbol/interval/year; DuckDB views; SQLite for relational app state.
-- Safety: OS keychain for keys, always-visible kill switch, aggregate exposure cap, confirmation modals, append-only audit log.
+- Charts: `lightweight-charts` v5 + custom SVG markup layer. Interactive long/short drawings are live orders — drag SL/TP lines, debounced 250ms modify on the exchange.
+- Data: ~7 GB target across Parquet (Hive-partitioned by symbol/interval/year), fed by `bootstrap_lake` CLI with checkpointed resume.
+- Research: event-driven backtest engine, walk-forward, parameter sweep, Monte Carlo — all deterministic, byte-identical on repeat runs.
+- ML: purged k-fold + embargo CV (Prado AFML ch. 7), `logreg` + `xgb_cls` baselines, `MLStrategy` deploys a trained model as a first-class slot strategy.
+- Analog: DTW with LB_Keogh pruning over z-scored windows; forward-return distribution as the answer.
+- Safety: OS keychain for keys, always-visible kill switch, aggregate exposure cap, confirmation modals, append-only audit log, optional testnet shadow mode per slot.
+- Desktop UX: File / Edit / View / Tools / Settings / Help menu ribbon, Wallet sidebar tab, Notes panel with markdown + screenshot attachments, Settings with tabbed forms (Exchange / Wallets / Notifications / Risk / Data / Appearance / Advanced).
 
 ## 7. Data Layer (v1.0)
 

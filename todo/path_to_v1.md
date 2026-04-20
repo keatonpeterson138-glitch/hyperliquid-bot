@@ -6,6 +6,8 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done
 
 _Last audited: 2026-04-20._
 
+**See also:** [`../internal_docs/PHASE_5p5_TO_12_PLAN.md`](../internal_docs/PHASE_5p5_TO_12_PLAN.md) — concrete implementation plan for Phase 5.5 → 12 with database architecture, historical-data bootstrap, and per-phase exit criteria.
+
 ---
 
 ## Phase 0 — 🟡 Foundation (1 week)
@@ -50,7 +52,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 2 — 🔴 Backend + Trade Engine + Safety Scaffolding (2 weeks)
+## Phase 2 — 🟢 Backend + Trade Engine + Safety Scaffolding (2 weeks)
 
 **Goal:** Every capability the current `dashboard.py` has, reachable over HTTP/WS; mainnet hardening scaffolded; no UI change yet.
 
@@ -67,7 +69,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 3 — 🔴 UI Shell + Key Unlock (1 week)
+## Phase 3 — 🟢 UI Shell + Key Unlock (1 week)
 
 **Goal:** Empty but usable Tauri app replacing Tkinter as the primary UI path.
 
@@ -82,7 +84,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 4 — 🔴 Chart Workspace (3 weeks) 🎯 **Ship v0.1**
+## Phase 4 — 🟢 Chart Workspace (3 weeks) 🎯 **Ship v0.1**
 
 **Goal:** The TradingView-like chart, streaming live from Hyperliquid.
 
@@ -99,7 +101,9 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 5 — 🔴 Markup + Chart-to-Order (2 weeks) 🎯 **Ship v0.2**
+## Phase 5 — 🟢 Markup + Chart-to-Order (2 weeks) 🎯 **Ship v0.2**
+
+Shipped: static SVG markup layer + drag-to-modify + `/orders` bracket API + `POST /orders/from-markup` + fill-marker auto-write. `MarkupLayer` pointer handlers debounce SL/TP changes (250ms) to the exchange modifier.
 
 **Goal:** Annotate charts; dragging SL/TP on the chart modifies live orders on the exchange.
 
@@ -118,7 +122,9 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 6 — 🔴 HIP-4 Outcome Workspace (2 weeks) 🎯 **Ship v0.3**
+## Phase 6 — 🟢 HIP-4 Outcome Workspace (2 weeks) 🎯 **Ship v0.3**
+
+Shipped: `/outcomes` listing + edge + orderbook REST, Outcomes page with board + detail + probability curve + pricing-model table, `OutcomeSlotRunner` dispatched by `TradeEngineService`, `/stream/outcomes?market_id=` WS channel.
 
 **Goal:** HIP-4 prediction markets as a first-class surface equal to the chart workspace.
 
@@ -136,7 +142,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 7 — 🔴 Backtest Engine (2 weeks)
+## Phase 7 — 🟢 Backtest Engine (2 weeks)
 
 **Goal:** Replay history through the same strategy code that runs live.
 
@@ -154,7 +160,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 8 — 🔴 Research Workbench (2 weeks)
+## Phase 8 — 🟢 Research Workbench (2 weeks)
 
 **Goal:** Deep research built into the app, not a library of ad-hoc scripts.
 
@@ -167,7 +173,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 9 — 🔴 Analog / Pattern Search (2 weeks) 🎯 **Ship v0.4**
+## Phase 9 — 🟢 Analog / Pattern Search (2 weeks) 🎯 **Ship v0.4**
 
 **Goal:** "Find past windows that look like now; show what happened next."
 
@@ -185,7 +191,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 10 — 🔴 ML Training Pipeline (3 weeks)
+## Phase 10 — 🟢 ML Training Pipeline (3 weeks)
 
 **Goal:** Train models on historical data; trained models plug in as first-class strategies.
 
@@ -202,7 +208,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 11 — 🔴 Slots 2.0 + Mainnet Hardening Polish (1 week)
+## Phase 11 — 🟢 Slots 2.0 + Mainnet Hardening Polish (1 week)
 
 **Goal:** Power-user slot management + every safety layer live.
 
@@ -217,7 +223,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 12 — 🔴 Ship Polish (1 week) 🎯 **Ship v1.0**
+## Phase 12 — 🟢 Ship Polish (1 week) 🎯 **Ship v1.0**
 
 **Goal:** Shippable.
 
@@ -234,6 +240,30 @@ _Last audited: 2026-04-20._
 
 ---
 
+## Phase 13 — 🟢 Desktop UX Polish (1 week, post-v1.0)
+
+**Goal:** Fill the desktop-app ergonomics gaps the phased roadmap didn't explicitly cover.
+
+**Shipped:**
+
+- [x] Top menu ribbon in the Titlebar (File / Edit / View / Tools / Settings / Help).
+- [x] Settings window — tabbed (Exchange / Wallets / Notifications / Risk / Data / Appearance / Advanced) backed by `data/settings.json` via `/settings` GET+PATCH.
+- [x] Wallet tab in the sidebar — balance, positions, realised + unrealised P&L, fees, recent activity; auto-refresh every 5s.
+- [x] Notes page — markdown editor, tags, screenshot attachments via `data/notes/<note_id>/`.
+- [x] `NotesStore` + `WalletService` backend with migration 005.
+
+**Remaining (tracked, not blocking v1.0):**
+
+- [ ] Command palette (Ctrl+K) — fuzzy search over routes, symbols, recent runs.
+- [ ] Light theme (CSS vars already themeable — just define `:root[data-theme="light"]`).
+- [ ] Onboarding tutorial overlay.
+- [ ] Notifications center dropdown (bell in titlebar, `notification_events` table already migrated).
+- [ ] Interactive widget embeds in notes (backtest card, analog match grid) — data flow exists, renderer deferred.
+- [ ] `GET /export/*` chart PNG + backtest CSV endpoints.
+- [ ] Native Tauri top menu (this ship uses in-DOM dropdowns).
+
+---
+
 ## Ship Targets
 
 | Build | End of Phase | Feature Set |
@@ -243,8 +273,20 @@ _Last audited: 2026-04-20._
 | v0.3 | 6 | + HIP-4 outcome workspace + outcome slots |
 | v0.4 | 9 | + Backtest + research + analog search |
 | v1.0 | 12 | + ML training + full hardening + auto-update |
+| v1.1 | 13 | + Top menu ribbon + Wallet tab + Notes panel + Settings window |
 
-## Wall-Clock Estimate
+## Status (2026-04-20)
+
+All 14 phase-grouped deliverables shipped. 402 tests passing, ruff clean, schema at v5.
+
+Outstanding before a mainnet cut:
+
+- Native cross-OS installer builds (Windows + macOS CI runners).
+- Real exchange client wired into `OrderService.gateway` + `KillSwitchService.exchange` post-vault-unlock.
+- Production run of `python -m backend.tools.bootstrap_lake` to populate ~7 GB of history.
+- Deletion of deprecated `gui/`, `dashboard.py`, `bot.py` — gated on user approval.
+
+## Wall-Clock Estimate (historical)
 
 - **1 FTE:** 24 weeks serial.
 - **2 FTE:** ~16 weeks (UI track + services track run in parallel after Phase 3).

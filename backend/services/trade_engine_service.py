@@ -12,6 +12,7 @@ from typing import Any
 
 from backend.models.slot import Slot
 from backend.services.kill_switch import KillSwitchService
+from backend.services.outcome_slot_runner import OutcomeSlotRunner
 from backend.services.slot_repository import SlotRepository
 from backend.services.slot_runner import SlotRunner
 from engine import Decision, DecisionAction
@@ -25,13 +26,22 @@ class TradeEngineService:
         repo: SlotRepository,
         runner: SlotRunner,
         *,
+        outcome_runner: OutcomeSlotRunner | None = None,
         kill_switch: KillSwitchService | None = None,
         on_event: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.repo = repo
         self.runner = runner
+        self.outcome_runner = outcome_runner
         self.kill_switch = kill_switch
         self.on_event = on_event
+
+    def _runner_for(self, slot: Slot):
+        if slot.kind == "outcome":
+            if self.outcome_runner is None:
+                return None
+            return self.outcome_runner
+        return self.runner
 
     # ── Slot lookup ────────────────────────────────────────────────────────
 
@@ -81,14 +91,21 @@ class TradeEngineService:
             return Decision(DecisionAction.HOLD, reason=f"unknown slot {slot_id}")
         if self.kill_switch is not None and self.kill_switch.is_active():
             return Decision(DecisionAction.HOLD, reason="kill switch active")
-        return self.runner.tick(slot)
+        runner = self._runner_for(slot)
+        if runner is None:
+            return Decision(DecisionAction.HOLD, reason=f"no runner for kind={slot.kind!r}")
+        return runner.tick(slot)
 
     def tick_all_enabled(self) -> dict[str, Decision]:
         out: dict[str, Decision] = {}
         if self.kill_switch is not None and self.kill_switch.is_active():
             return out
         for slot in self.repo.list_all(enabled_only=True):
-            out[slot.id] = self.runner.tick(slot)
+            runner = self._runner_for(slot)
+            if runner is None:
+                out[slot.id] = Decision(DecisionAction.HOLD, reason=f"no runner for kind={slot.kind!r}")
+                continue
+            out[slot.id] = runner.tick(slot)
         return out
 
     # ── Helpers ────────────────────────────────────────────────────────────

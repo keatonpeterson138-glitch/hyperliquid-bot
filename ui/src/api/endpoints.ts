@@ -9,6 +9,8 @@ import type {
   KillSwitchReport,
   KillSwitchStatus,
   Market,
+  OutcomeEdge,
+  OutcomeTapeResponse,
   Slot,
   SlotCreateBody,
   VaultStatus,
@@ -79,6 +81,183 @@ export const candles = {
     return api.get<CandlesResponse>(`/candles?${q.toString()}`);
   },
   catalog: () => api.get<CatalogResponse>("/catalog"),
+};
+
+export interface OrderLeg {
+  id: number | null;
+  leg_type: "entry" | "sl" | "tp";
+  exchange_order_id: string | null;
+  price: number | null;
+  status: string;
+}
+
+export interface Order {
+  id: string;
+  symbol: string;
+  side: "long" | "short";
+  size_usd: number;
+  entry_type: "market" | "limit";
+  entry_price: number | null;
+  sl_price: number | null;
+  tp_price: number | null;
+  leverage: number | null;
+  status: string;
+  slot_id: string | null;
+  markup_id: string | null;
+  exchange_order_id: string | null;
+  fill_price: number | null;
+  source: string;
+  reject_reason: string | null;
+  legs: OrderLeg[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface OrderCreateBody {
+  symbol: string;
+  side: "long" | "short";
+  size_usd: number;
+  entry_type?: "market" | "limit";
+  entry_price?: number | null;
+  sl_price?: number | null;
+  tp_price?: number | null;
+  leverage?: number | null;
+  slot_id?: string | null;
+  markup_id?: string | null;
+  source?: string;
+}
+
+export const orders = {
+  list: (params: { symbol?: string; slot_id?: string; status?: string; markup_id?: string } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) q.set(k, String(v));
+    }
+    const qs = q.toString();
+    return api.get<Order[]>(`/orders${qs ? `?${qs}` : ""}`);
+  },
+  create: (body: OrderCreateBody) => api.post<Order>("/orders", body),
+  modify: (id: string, body: { sl_price?: number | null; tp_price?: number | null }) =>
+    api.patch<Order>(`/orders/${id}`, body),
+  cancel: (id: string) => api.del<Order>(`/orders/${id}`),
+  fromMarkup: (body: { markup_id: string; size_usd: number; leverage?: number | null; slot_id?: string | null }) =>
+    api.post<Order>("/orders/from-markup", body),
+};
+
+export const outcomes = {
+  list: (params: { subcategory?: string; active_only?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) q.set(k, String(v));
+    }
+    const qs = q.toString();
+    return api.get<{ markets: Market[] }>(`/outcomes${qs ? `?${qs}` : ""}`);
+  },
+  tape: (market_id: string, from: string, to?: string) => {
+    const q = new URLSearchParams({ from });
+    if (to) q.set("to", to);
+    return api.get<OutcomeTapeResponse>(
+      `/outcomes/${encodeURIComponent(market_id)}/tape?${q.toString()}`,
+    );
+  },
+  edge: (market_id: string, default_vol?: number) => {
+    const q = new URLSearchParams();
+    if (default_vol !== undefined) q.set("default_vol", String(default_vol));
+    const qs = q.toString();
+    return api.get<OutcomeEdge>(
+      `/outcomes/${encodeURIComponent(market_id)}/edge${qs ? `?${qs}` : ""}`,
+    );
+  },
+};
+
+export interface WalletPosition {
+  symbol: string;
+  side: string;
+  size_usd: number;
+  entry_price: number | null;
+  unrealised_pnl_usd: number | null;
+}
+
+export interface WalletSummary {
+  wallet_address: string | null;
+  usdc_balance: number | null;
+  total_notional_usd: number;
+  unrealised_pnl_usd: number;
+  realised_pnl_session_usd: number;
+  realised_pnl_all_time_usd: number;
+  fees_paid_all_time_usd: number;
+  positions: WalletPosition[];
+  open_orders: number;
+  last_updated: string;
+}
+
+export const wallet = {
+  summary: (wallet_address?: string) => {
+    const q = wallet_address ? `?wallet_address=${encodeURIComponent(wallet_address)}` : "";
+    return api.get<WalletSummary>(`/wallet/summary${q}`);
+  },
+  activity: (limit = 25) => api.get<Order[]>(`/wallet/activity?limit=${limit}`),
+};
+
+export interface NoteAttachment {
+  id: number | null;
+  kind: string;
+  path: string;
+  meta: Record<string, unknown>;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  body_md: string;
+  tags: string[];
+  linked_layout_id: string | null;
+  linked_backtest_id: string | null;
+  attachments: NoteAttachment[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export const notes = {
+  list: (tag?: string) => {
+    const q = tag ? `?tag=${encodeURIComponent(tag)}` : "";
+    return api.get<Note[]>(`/notes${q}`);
+  },
+  create: (body: { title: string; body_md?: string; tags?: string[] }) =>
+    api.post<Note>("/notes", body),
+  get: (id: string) => api.get<Note>(`/notes/${id}`),
+  update: (id: string, patch: Partial<{ title: string; body_md: string; tags: string[] }>) =>
+    api.patch<Note>(`/notes/${id}`, patch),
+  delete: (id: string) => api.del<void>(`/notes/${id}`),
+  attach: (id: string, body: { path: string; kind?: string; meta?: Record<string, unknown> }) =>
+    api.post<NoteAttachment>(`/notes/${id}/attachments`, body),
+};
+
+export interface AppSettings {
+  testnet: boolean;
+  email_enabled: boolean;
+  telegram_enabled: boolean;
+  desktop_notifications: boolean;
+  default_stop_loss_pct: number;
+  default_take_profit_pct: number;
+  confirm_above_usd: number;
+  confirm_modify_pct: number;
+  confirm_leverage_above: number;
+  aggregate_exposure_cap_usd: number | null;
+  data_root: string;
+  backfill_throttle_ms: number;
+  cross_validate_threshold_pct: number;
+  duckdb_cache_mb: number;
+  theme: string;
+  density: string;
+  dev_mode: boolean;
+  log_level: string;
+  extras: Record<string, unknown>;
+}
+
+export const settings = {
+  get: () => api.get<AppSettings>("/settings"),
+  patch: (patch: Partial<AppSettings>) => api.patch<AppSettings>("/settings", patch),
 };
 
 export const killswitch = {

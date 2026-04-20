@@ -1,9 +1,11 @@
 // Full chart workspace: symbol + interval pickers, backend-driven candle
-// fetch, lightweight-charts render. Phase 4 v0.1 ship.
+// fetch, lightweight-charts render, SVG markup overlay.
+// Phase 4 v0.1 ship + Phase 5 shell.
 
 import { useEffect, useMemo, useState } from "react";
 
-import { CandleChart } from "../components/CandleChart";
+import { CandleChart, type ChartCoords } from "../components/CandleChart";
+import { MarkupLayer } from "../components/MarkupLayer";
 import { candles, universe } from "../api/endpoints";
 import type { CandlesResponse, Market } from "../api/types";
 
@@ -24,6 +26,7 @@ export function ChartsPage() {
   const [data, setData] = useState<CandlesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [coords, setCoords] = useState<ChartCoords | null>(null);
 
   useEffect(() => {
     universe
@@ -104,7 +107,19 @@ export function ChartsPage() {
           </div>
         </div>
         {error ? <div className="error">{error}</div> : null}
-        <CandleChart data={data} height={480} />
+        <div style={{ position: "relative" }}>
+          <CandleChart data={data} height={480} onCoordsChange={setCoords} />
+          {coords && (
+            <MarkupLayer
+              symbol={symbol}
+              interval={interval}
+              priceToPixel={coords.priceToPixel}
+              pixelToPrice={coords.pixelToPrice}
+              width={coords.width}
+              height={coords.height}
+            />
+          )}
+        </div>
       </section>
 
       <section className="card">

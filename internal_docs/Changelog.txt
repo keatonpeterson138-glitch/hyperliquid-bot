@@ -111,3 +111,83 @@ Final state: 4 runtime source adapters + router + writer/reader + catalog + CLI 
 Next: Phase 2 (UniverseManager → app_db → KeyVault → AuditService → KillSwitch → TradeEngineService → slot APIs → ShadowClient). See `PHASE_2_BACKEND_ENGINE.md`.
 
 ---
+
+## 2026-04-20
+
+### Phase 5 polish + Phase 6 kickoff — outcome board, edge endpoint, markup overlay live
+
+**Phase 6 — outcome workspace (first slice):**
+- NEW: `GET /outcomes` — lists active HIP-4 outcome markets via `UniverseManager.list_markets(kind="outcome")`. Optional `subcategory` filter (politics/sports/crypto/macro). Reuses `get_universe_manager` DI from the `/universe` router so production wiring, test overrides, and 503-when-not-configured all share one source of truth.
+- NEW: `GET /outcomes/{market_id}/edge` — pricing-model edge snapshot (theoretical P(Yes), market Yes, signed edge, implied vol, vol source). Wraps `core.pricing_model.PriceBinaryModel.analyse()` behind a `get_pricing_model` DI stub (Phase 6 wiring will inject a live `OutcomeClient`). Accepts both `outcome:<int>` and bare numeric ids for ergonomics; returns 400 for non-numeric, 404 for unknown outcomes, 503 when the model isn't wired.
+- NEW: `backend/models/outcomes.py::OutcomeEdge` — Pydantic response model for the edge endpoint.
+- NEW: `ui/src/pages/Outcomes.tsx` — replaces the placeholder with the Phase 6 shell: left-rail market board (category chips, list, selection), right-pane detail (resolution header, stats row with last market prob + theoretical + edge + days-to-resolve, probability curve from `/tape`, pricing-model table, Phase-6 TODO list).
+- NEW: `ui/src/components/ProbabilityChart.tsx` — lightweight-charts LineSeries bounded to [0, 1] for HIP-4 markets (prediction-market probability ≠ candle OHLC). Overlays the pricing-model theoretical as a dashed line so edge is visible at a glance.
+- NEW: `ui/src/api/endpoints.ts::outcomes.{list, tape, edge}` + `types.ts::{OutcomeTick, OutcomeTapeResponse, OutcomeEdge}`.
+- NEW: `tests/unit/backend/api/test_outcomes.py` — 10 new tests (5 listing, 5 edge) on top of the 3 existing tape tests. Covers listing filter by subcategory, perp exclusion, edge-id parsing (prefixed + bare), 404 for unknown, 503 when not wired.
+
+**Phase 5 polish:**
+- MODIFIED: `ui/src/components/MarkupLayer.tsx` — expanded tool rendering beyond horizontal_line. Now renders `long_position` / `short_position` (entry + SL + TP triplet with translucent risk/reward boxes in red/green), `fill_marker` (right-edge triangle, up/down for buy/sell), plus state-aware styling (pending = dashed, cancelled = faded). Adds a drawing-list panel with state badges, locked/hidden indicators, per-row delete. Wired into `Charts.tsx` via a new `onCoordsChange` callback on `CandleChart` that emits a `priceToPixel` converter whenever the chart scales or resizes — previously orphaned, now actually visible.
+- MODIFIED: `ui/src/components/CandleChart.tsx` — exposes `ChartCoords` via `onCoordsChange(coords | null)` so overlays can render in sync with the candle series. Emits on mount, resize, visible-range change, and data updates; nulls on unmount.
+- NEW: `tests/unit/backend/api/test_markups.py` — 6 API tests for `/markups` CRUD (list, filter, patch, 404, delete, 503). Complements the existing `test_markup_store.py` service-layer tests.
+- FIXED: `ui/package.json` — bumped `lightweight-charts` from `^4.2.0` → `^5.1.0`. Phase 4 committed v5-style `addSeries(CandlestickSeries, opts)` imports that didn't exist in v4, so the chart crashed at runtime with `does not provide an export named 'CandlestickSeries'` the moment you actually opened `/charts`. Upgrading aligns the installed API with the code.
+- MODIFIED: `ui/src/App.css` — grew from minimal to a full shell stylesheet (sidebar, titlebar, page/card primitives, markup overlay with state badges, outcomes board + detail grid, stat tiles, chips, tables, tone-aware positive/negative text).
+- FIXED: `tests/unit/backend/db/test_app_db.py::test_migrate_applies_initial_schema` — was asserting `schema_version == 1`; Phase 5 bumped it to 2 (`002_markups.sql`). Assertion updated and `layouts` + `markups` added to the required-tables check.
+
+Full suite: 296 tests passing, `ruff check` clean. Production DI wiring for all phase-2 services (UniverseManager, MarkupStore, PriceBinaryModel, etc.) remains stubbed to 503 per the Phase 2 shell design — the UI handles each 503 with an inline hint rather than crashing, so the Outcomes page shows "outcome discovery is not wired yet" until the production DI wiring lands.
+
+---
+
+## 2026-04-20 (continued)
+
+### Phases 5.5 → 13 implementation
+
+Huge push — the remaining roadmap lands in one session. 402 tests passing, ruff clean.
+
+**Phase 5.5 — chart-to-order.**
+`OrderRepository` + `OrderService` over new migration 003 (`orders`, `order_legs`). `/orders` POST/PATCH/DELETE/list + `POST /orders/from-markup` with bracket validation (SL below entry for longs, above for shorts) and an injectable `ExchangeGateway` protocol. Fill callback writes a `fill_marker` markup automatically. UI `MarkupLayer` now has pointer-drag handlers that persist to `/markups` and modify live orders (debounced 250ms) when `state='active'`; the "Arm" button promotes a draft long/short box to a working order via `/orders/from-markup`. `CandleChart` exposes both `priceToPixel` and `pixelToPrice` converters so the SVG overlay stays in sync through zoom/resize.
+
+**Phase 6 (residual) — outcome workspace.**
+`OutcomeSlotRunner` (parallel to perp `SlotRunner`) polls the pricing model, emits `OPEN_LONG`/`OPEN_SHORT`/`CLOSE_*` when `|edge| > threshold`. `TradeEngineService` now dispatches by `slot.kind`. `/stream/outcomes?market_id=…` filtered WS channel + `GET /outcomes/{id}/orderbook` stub endpoint. Full test suite including edge-flip close-then-reverse.
+
+**Phase 7 — backtest engine.**
+`backend/services/backtest/`: `BacktestEngine`, `ExchangeShim` (deterministic fills, slippage + fee + funding bps), `BacktestResult` (equity curve, trades, 15 metrics), `walk_forward`, `parameter_sweep` (grid + rank_by), `monte_carlo_bootstrap` (5/50/95 pct on DD + ending equity). `/backtest`, `/backtest/{id}`, `/backtest/sweep`, `/backtest/monte-carlo` REST. Determinism test: same inputs produce byte-identical equity curves.
+
+**Phase 8 — research workbench.**
+`Study` protocol + registry, five concrete studies (`correlation_matrix`, `seasonality_heatmap`, `volatility_regime`, `returns_summary`, `event_study`). `/research` list + `/research/run` endpoints. `StudyResult` carries a DataFrame + `ChartSpec` list + markdown summary so the UI can render Vega-lite-lite specs directly.
+
+**Phase 9 — analog / pattern search.**
+`AnalogEngine` with DTW path (Sakoe-Chiba banded + LB_Keogh pruning) over z-scored windows. Top-K matches + forward-return distribution (5/25/50/75/95 percentile) computed per query. `/analog/query` REST. Embedding+FAISS path stubbed in the docstring for v1.1. 7 algorithmic tests including "self-similar window finds itself" sanity check.
+
+**Phase 10 — ML training pipeline.**
+`backend/services/ml/`: `features.py` (protocol + `core_v1` feature set: returns, EMAs, RSI, ATR, volume-z, realised vol), `labels.py` (`forward_return`, `direction`, `triple_barrier` Prado AFML ch. 3, `vol_adjusted_return`), `cv.py` (`PurgedKFold` with label-horizon purge + embargo — critical for non-IID financial data), `trainer.py` (scikit-learn pipelines for `logreg`, lazy-import XGBoost for `xgb_cls`), `registry.py` (flat-file model store under `data/models/<family>/<ts>/` + SQLite index via migration 004), `ml_strategy.py` (`MLStrategy` exposes a trained model through the `BaseStrategy.analyze()` contract). `/models` CRUD + `/models/train` + `/models/{id}/promote` endpoints. Forward-peek regression test: features computed on `bars[:100]` match `bars[:200]` on the overlap region.
+
+**Phase 11 — slots 2.0 + hardening.**
+`ExposureCapService` — aggregate-notional gate that blocks new positions above the cap. `SettingsStore` — JSON-file settings with schema-stable defaults, merge-on-write, corrupt-file fallback. `/settings` GET/PATCH. `infinity` serialises as `null` over the wire (UI treats as "unlimited cap"). Bootstrap lake CLI (task #19) — `python -m backend.tools.bootstrap_lake` with checkpointed per-year resume via `bootstrap_progress` SQLite table.
+
+**Phase 12 — ship polish.**
+Tauri shell now spawns the Python backend as a sidecar in production (`ui/src-tauri/src/sidecar.rs` via `tauri-plugin-shell`) and kills it on window close. Debug builds skip the spawn so hot-reload works. Rotating backend log (`data/logs/backend.log`, 5 MB × 3) + `/logs?tail=N&level=WARN` endpoint. `docs/getting_started.md` full user-facing quickstart with keyboard shortcuts, troubleshooting, and data-lake path reference.
+
+**Phase 13 — desktop UX polish** (added per user request).
+Migration 005 — `notes` + `note_attachments` + `notification_events`. `NotesStore` CRUD with screenshot attachments under `data/notes/<note_id>/`. `WalletService` aggregates balance + positions + P&L (session + all-time) + fees paid from `orders` + `audit_log`; falls back to local orders when the exchange gateway isn't wired. `/wallet/summary`, `/wallet/activity`, `/notes/*` REST. `/settings` page added. UI:
+  * New `Titlebar` with **File / Edit / View / Tools / Settings / Help** menu ribbon (in-DOM dropdowns; native Tauri menus in a later iteration).
+  * **Wallet** tab added to the sidebar — live balance, positions table, recent-orders table, auto-refresh.
+  * **Notes** page — markdown editor with attach-screenshot placeholder (hooks in when chart canvas capture lands).
+  * **Settings** page — tabbed (Exchange / Wallets / Notifications / Risk / Data / Appearance / Advanced) with a Revert + Save flow. Private keys are explicitly routed through the vault wizard, never this page.
+
+### Files
+- 6 new migrations → DB now at schema_version=5 (001 initial, 002 markups, 003 orders, 004 models, 005 notes).
+- New `backend/services/`: `order_repository`, `order_service`, `outcome_slot_runner`, `exposure_cap`, `settings_store`, `notes_store`, `wallet`.
+- New `backend/services/backtest/` + `backend/services/research/` + `backend/services/analog/` + `backend/services/ml/` packages.
+- New API routers: `/orders`, `/backtest`, `/research`, `/analog`, `/models`, `/settings`, `/notes`, `/wallet`, `/logs`.
+- New CLI: `backend/tools/bootstrap_lake.py`.
+- New UI pages: `WalletPage`, `NotesPage`, `SettingsPage`. Extended `Titlebar`, `Sidebar`.
+- New plan doc: `internal_docs/PHASE_5p5_TO_12_PLAN.md` (covers 5.5 → 13).
+- User-facing doc: `docs/getting_started.md`.
+
+### Gaps deliberately left for later passes
+- Cross-platform installer matrix (needs native Windows + macOS CI).
+- Outcome slot deployment UI (backend runner ready; front-end "Deploy outcome_arb" form not yet wired).
+- Command palette (Ctrl+K), light theme, onboarding tutorial — Phase 13 backlog.
+- Deleting `gui/`, `dashboard.py`, `bot.py` — requires explicit user approval; left intact.
+
+---

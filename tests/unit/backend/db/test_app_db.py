@@ -16,8 +16,24 @@ def db() -> AppDB:
 
 
 def test_migrate_applies_initial_schema(db: AppDB) -> None:
-    assert db.schema_version() == 1
-    for table in ("markets", "market_tags", "audit_log", "slots", "slot_state", "schema_version"):
+    # Every migration that has landed should have been applied.
+    assert db.schema_version() == 5
+    for table in (
+        "markets",
+        "market_tags",
+        "audit_log",
+        "slots",
+        "slot_state",
+        "schema_version",
+        "layouts",
+        "markups",
+        "orders",
+        "order_legs",
+        "models",
+        "notes",
+        "note_attachments",
+        "notification_events",
+    ):
         assert db.table_exists(table)
 
 

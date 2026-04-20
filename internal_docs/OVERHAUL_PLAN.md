@@ -119,7 +119,9 @@ This is a replacement of `dashboard.py`, not a patch. Existing `core/exchange.py
 
 ## 4. Phased Roadmap
 
-12 phases. Ship a user-visible build at the end of every 🎯 phase.
+12 phases + Phase 13 desktop-UX polish. Ship a user-visible build at the end of every 🎯 phase.
+
+**Status (2026-04-20):** Phases 0 → 13 all shipped. Tag pending on native-installer CI. See `PHASE_5p5_TO_12_PLAN.md` for implementation notes and `../todo/path_to_v1.md` for per-phase status flags.
 
 ### Phase 0 — Foundation (1 week)
 
@@ -182,7 +184,7 @@ See §13 for the hardening spec.
 
 See §7.
 
-### Phase 5 — Markup + Chart-to-Order (2 weeks) 🎯 **Ship v0.2**
+### Phase 5 — Markup + Chart-to-Order (2 weeks) 🎯 **Ship v0.2** [🟢 shipped]
 
 - Drawing toolkit (see §7.3): trendline, fib, rectangle, ellipse, text, long/short position tool.
 - Snap-to-OHLC, lock/hide/group, templates, per-chart layout persistence.
@@ -191,7 +193,7 @@ See §7.
 
 See §7.3 + §9.
 
-### Phase 6 — HIP-4 Outcome Workspace (2 weeks) 🎯 **Ship v0.3**
+### Phase 6 — HIP-4 Outcome Workspace (2 weeks) 🎯 **Ship v0.3** [🟢 shipped]
 
 - Separate visualization surface for outcome contracts (probability curve, not candlestick).
 - Outcome board: active markets grouped by category (crypto / politics / sports / macro), resolution dates, implied probabilities.
@@ -201,7 +203,7 @@ See §7.3 + §9.
 
 See §8.
 
-### Phase 7 — Backtest Engine (2 weeks)
+### Phase 7 — Backtest Engine (2 weeks) [🟢 shipped]
 
 - Event-driven simulator reusing `strategy.analyze()`.
 - Fills: market / limit / stop / trailing with slippage + fees + perp funding.
@@ -211,14 +213,14 @@ See §8.
 
 See §10.
 
-### Phase 8 — Research Workbench (2 weeks)
+### Phase 8 — Research Workbench (2 weeks) [🟢 shipped]
 
 - Studies: correlation matrix, cointegration pair finder, regime classifier (HMM/rule), seasonality heatmaps, event studies (FOMC/CPI/earnings), funding-vs-price, volatility regime buckets, outcome-market news impact.
 - UI: Research tab with dataset picker + study form + results view + "save to notebook" (markdown + embedded charts, exportable to `.html`/`.pdf`).
 
 See §11.1.
 
-### Phase 9 — Analog / Pattern Search (2 weeks) 🎯 **Ship v0.4**
+### Phase 9 — Analog / Pattern Search (2 weeks) 🎯 **Ship v0.4** [🟢 shipped]
 
 - `AnalogEngine` service: DTW retrieval + learned-embedding retrieval via FAISS.
 - Indexer: precompute windows, normalize, build FAISS index per (asset × interval × window-length × encoder).
@@ -228,7 +230,7 @@ See §11.1.
 
 See §12.
 
-### Phase 10 — ML Training Pipeline (3 weeks)
+### Phase 10 — ML Training Pipeline (3 weeks) [🟢 shipped]
 
 - Feature store in Parquet; per-asset feature tables.
 - Labelers: forward-return-N, triple-barrier (pt/sl/h), direction-N, vol-adjusted-return.
@@ -240,7 +242,7 @@ See §12.
 
 See §11.2.
 
-### Phase 11 — Slots 2.0 + Hardening Polish (1 week)
+### Phase 11 — Slots 2.0 + Hardening Polish (1 week) [🟢 shipped]
 
 - Per-slot advanced config: ATR stops, trailing, MTF confirmation, regime filter, loss cooldown, volume confirm, RSI guard, ML model override.
 - Per-slot mini-chart + live signal log.
@@ -250,7 +252,7 @@ See §11.2.
 
 See §13.6 for shadow-mode spec.
 
-### Phase 12 — Ship Polish (1 week) 🎯 **Ship v1.0**
+### Phase 12 — Ship Polish (1 week) 🎯 **Ship v1.0** [🟢 shipped]
 
 - Auto-update (Tauri updater).
 - Installer packaging (`.exe` / `.dmg` / `.AppImage`).

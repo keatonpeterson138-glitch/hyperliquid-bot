@@ -5,10 +5,13 @@ import { Titlebar } from "./components/Titlebar";
 import { AuditPage } from "./pages/AuditPage";
 import { ChartsPage } from "./pages/Charts";
 import { Dashboard } from "./pages/Dashboard";
+import { NotesPage } from "./pages/NotesPage";
 import { OutcomesPage } from "./pages/Outcomes";
+import { SettingsPage } from "./pages/SettingsPage";
 import { SlotsPage } from "./pages/SlotsPage";
 import { UniversePage } from "./pages/Universe";
 import { VaultPage } from "./pages/VaultPage";
+import { WalletPage } from "./pages/WalletPage";
 
 export default function App() {
   return (
@@ -21,12 +24,15 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/wallet" element={<WalletPage />} />
               <Route path="/charts" element={<ChartsPage />} />
               <Route path="/slots" element={<SlotsPage />} />
               <Route path="/universe" element={<UniversePage />} />
               <Route path="/outcomes" element={<OutcomesPage />} />
+              <Route path="/notes" element={<NotesPage />} />
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/vault" element={<VaultPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </div>
         </div>

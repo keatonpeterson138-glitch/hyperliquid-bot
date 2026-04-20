@@ -1,3 +1,11 @@
+// Subscribes to the backend /stream WebSocket and keeps a rolling
+// ring-buffer of events. Auto-reconnects with exponential backoff.
+//
+// React 19 StrictMode double-invokes effects in dev — the first cleanup
+// runs before the socket has finished handshaking, which would otherwise
+// flood the console with "WebSocket is closed before the connection is
+// established". We handle that with a cancel flag + readyState check.
+
 import { useEffect, useRef, useState } from "react";
 
 import { BACKEND_URL } from "../api/client";
@@ -17,18 +25,26 @@ export function useStream() {
     let cancelled = false;
     let retryDelay = 500;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let currentWs: WebSocket | null = null;
 
     const connect = () => {
       if (cancelled) return;
       const ws = new WebSocket(WS_URL);
+      currentWs = ws;
       wsRef.current = ws;
       setStatus("connecting");
 
       ws.onopen = () => {
+        if (cancelled) {
+          // Unmounted mid-handshake (typically StrictMode); close cleanly now.
+          ws.close();
+          return;
+        }
         retryDelay = 500;
         setStatus("open");
       };
       ws.onmessage = (msg) => {
+        if (cancelled) return;
         try {
           const event = JSON.parse(msg.data) as StreamEvent;
           setEvents((prev) => {
@@ -41,14 +57,14 @@ export function useStream() {
         }
       };
       ws.onclose = () => {
-        setStatus("closed");
         if (cancelled) return;
+        setStatus("closed");
         reconnectTimer = setTimeout(connect, retryDelay);
         retryDelay = Math.min(retryDelay * 2, 10_000);
       };
-      ws.onerror = () => {
-        ws.close();
-      };
+      // Don't call ws.close() here — onclose will fire on its own and we'd
+      // double-log. Just swallow the error event.
+      ws.onerror = () => {};
     };
 
     connect();
@@ -56,7 +72,17 @@ export function useStream() {
     return () => {
       cancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      wsRef.current?.close();
+      const ws = currentWs;
+      if (!ws) return;
+      // CONNECTING sockets will close themselves via the cancelled flag in
+      // onopen; calling close() on them is what produces the "closed before
+      // connection established" warning. Only close if already open/closing.
+      if (
+        ws.readyState === WebSocket.OPEN ||
+        ws.readyState === WebSocket.CLOSING
+      ) {
+        ws.close();
+      }
     };
   }, []);
 

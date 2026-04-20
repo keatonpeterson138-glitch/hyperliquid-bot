@@ -1,13 +1,20 @@
 import { NavLink } from "react-router-dom";
 
-const NAV: Array<{ to: string; label: string }> = [
+const NAV: Array<{ to: string; label: string; group?: string }> = [
   { to: "/dashboard", label: "Dashboard" },
+  { to: "/wallet", label: "Wallet" },
   { to: "/charts", label: "Charts" },
-  { to: "/slots", label: "Slots" },
-  { to: "/universe", label: "Universe" },
   { to: "/outcomes", label: "Outcomes" },
-  { to: "/audit", label: "Audit" },
-  { to: "/vault", label: "Vault" },
+  { to: "/slots", label: "Slots" },
+  { to: "/universe", label: "Universe", group: "research" },
+  { to: "/research", label: "Research", group: "research" },
+  { to: "/backtest", label: "Backtest", group: "research" },
+  { to: "/analog", label: "Analog", group: "research" },
+  { to: "/models", label: "Models", group: "research" },
+  { to: "/notes", label: "Notes", group: "other" },
+  { to: "/audit", label: "Audit", group: "other" },
+  { to: "/vault", label: "Vault", group: "other" },
+  { to: "/settings", label: "Settings", group: "other" },
 ];
 
 export function Sidebar() {
