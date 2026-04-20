@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Protocol
+from typing import Protocol
 
 import pandas as pd
 
@@ -43,8 +43,8 @@ class EngineContext:
     symbol: str
     current_price: float
     candles_df: pd.DataFrame
-    current_position: Optional[str] = None  # 'LONG' | 'SHORT' | None
-    entry_price: Optional[float] = None
+    current_position: str | None = None  # 'LONG' | 'SHORT' | None
+    entry_price: float | None = None
     open_position_count: int = 0
 
 
@@ -55,7 +55,7 @@ class Decision:
     action: DecisionAction
     reason: str = ""
     strength: float = 0.0
-    rejection: Optional[str] = None  # set when a signal was gated by risk
+    rejection: str | None = None  # set when a signal was gated by risk
 
     @property
     def is_actionable(self) -> bool:
@@ -74,7 +74,7 @@ class RiskGate(Protocol):
     def can_open_position(self, current_positions: int) -> bool: ...
     def check_position_exit(
         self, entry_price: float, current_price: float, is_long: bool
-    ) -> Optional[str]: ...
+    ) -> str | None: ...
 
 
 @dataclass

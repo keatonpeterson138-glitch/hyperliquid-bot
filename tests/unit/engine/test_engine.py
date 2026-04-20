@@ -7,7 +7,6 @@ manager must honor when plugged into the engine.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 import pytest
@@ -34,7 +33,7 @@ class FakeStrategy(BaseStrategy):
 class FakeRisk:
     can_trade_flag: bool = True
     can_open_flag: bool = True
-    exit_reason: Optional[str] = None
+    exit_reason: str | None = None
 
     def can_trade(self) -> bool:
         return self.can_trade_flag
@@ -44,7 +43,7 @@ class FakeRisk:
 
     def check_position_exit(  # noqa: ARG002
         self, entry_price: float, current_price: float, is_long: bool
-    ) -> Optional[str]:
+    ) -> str | None:
         return self.exit_reason
 
 
