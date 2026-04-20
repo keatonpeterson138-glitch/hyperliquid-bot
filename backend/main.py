@@ -14,6 +14,7 @@ from backend.api import (
     candles,
     health,
     killswitch,
+    markups,
     outcomes,
     slots,
     stream,
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router)
     app.include_router(killswitch.router)
     app.include_router(slots.router)
+    app.include_router(markups.router)
     app.include_router(stream.router)
     return app
 
