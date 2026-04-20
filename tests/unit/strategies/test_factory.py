@@ -43,11 +43,15 @@ class TestStrategyFactory:
         assert strat.slow_period == 13
 
     def test_param_types_are_coerced(self) -> None:
-        # Factory passes merged params through int()/float() — strings that
-        # parse as numbers must not raise.
-        strat = get_strategy("rsi_mean_reversion", period="10", oversold="25.0")
+        # Factory passes int-like params through int() and float-like through float().
+        # Integer-formatted strings work for int fields; float-formatted strings work for float fields.
+        strat = get_strategy("rsi_mean_reversion", period="10", oversold="25")
         assert strat.period == 10
         assert strat.oversold == 25
+
+        strat2 = get_strategy("breakout", lookback_period="30", breakout_threshold_pct="1.5")
+        assert strat2.lookback_period == 30
+        assert strat2.breakout_threshold_pct == 1.5
 
     def test_unknown_strategy_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="Unknown strategy"):
