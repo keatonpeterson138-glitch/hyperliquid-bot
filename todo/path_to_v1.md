@@ -14,7 +14,7 @@ _Last audited: 2026-04-20._
 
 **Tasks**
 
-- [ ] Split `dashboard.py` (2,431 LOC Tkinter monolith) into `engine.py` + `state.py` + `view.py`. The engine portion becomes the headless `TradeEngine` consumed by both `bot.py` and the v1 backend.
+- [~] Split `dashboard.py` (2,431 LOC Tkinter monolith) into `engine.py` + `state.py` + `view.py`. The engine portion becomes the headless `TradeEngine` consumed by both `bot.py` and the v1 backend. **Started:** `engine.py` + 16 unit tests landed (pure decision function: strategy + risk → Decision). `dashboard.py` and `bot.py` not yet wired — follow-up tasks.
 - [ ] Create `backend/` package (`api/`, `services/`, `models/`, `db/`, `main.py`) with FastAPI skeleton.
 - [ ] Create `ui/` Tauri + React + Vite + TypeScript project skeleton.
 - [x] Add dev/test deps to `requirements.txt`: `pytest>=8.0.0`, `pytest-asyncio>=0.23.0`, `ruff>=0.5.0`. Remaining v1 deps (`fastapi`, `uvicorn`, `duckdb`, `pyarrow`, `sqlalchemy`, `alembic`, `joblib`, `xgboost`, `scikit-learn`, `faiss-cpu`, `dtaidistance`, `cryptography`, `keyring`, `httpx`) to be added with the phases that need them.

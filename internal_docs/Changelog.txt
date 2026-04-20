@@ -36,4 +36,17 @@ Laid the verification wall for the overhaul. Any refactor that drifts strategy b
 
 33 tests total. Built without local Python tooling (apt-gated) — first CI run verifies.
 
+### Phase 0 continuation — TradeEngine extraction (decision layer)
+
+Carved the headless trading decision logic out of `dashboard.py` into a pure `TradeEngine` class. The engine is a pure function of its inputs — it never touches the exchange. Callers execute the emitted `Decision`. Same decision code path will drive live trading, backtest, and shadow mode.
+
+- NEW: `engine.py` (root) — `TradeEngine`, `EngineContext`, `Decision`, `DecisionAction`, `RiskGate` Protocol. Strategy signal + risk-gate check → `Decision` emission. Risk-manager exits take priority over strategy signals. `CLOSE_LONG`/`CLOSE_SHORT` strategy signals are validated against current position.
+- NEW: `tests/unit/engine/test_engine.py` — 16 unit tests: HOLD/LONG/SHORT signal handling, daily-loss-limit + max-positions-limit gating, empty-candles HOLD, SL/TP triggered close decisions, risk-exit priority, strategy CLOSE signals gated by position state, Decision.is_actionable parametrized.
+- MODIFIED: `pyproject.toml` — `engine.py` is outside `extend-exclude`, so ruff checks it.
+- MODIFIED: `todo/path_to_v1.md` — Phase 0 engine-extraction task marked partial; `bot.py` and `dashboard.py` rewiring tracked as follow-up.
+
+`engine.py` lives at the repo root temporarily so both `bot.py` and `dashboard.py` can import it during the migration; it moves to `backend/services/trade_engine.py` once Phase 2 lands the `backend/` package.
+
+Next: wire `bot.py` to use `TradeEngine`, verify behavior parity, then dashboard.py migration.
+
 ---
