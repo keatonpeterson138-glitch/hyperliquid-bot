@@ -36,6 +36,14 @@ _INTERVAL_MS: dict[str, int] = {
     "1d": 24 * 60 * 60_000,
 }
 
+# Rough "earliest history available" hints for SourceRouter planning.
+# Hyperliquid mainnet launched Q4 2023; most native perps listed over
+# the following months. HIP-3 perps (dex:symbol) didn't exist before
+# Oct 2025. These are conservative estimates — real retention may be
+# shorter for low-volume coins.
+_HL_LAUNCH: datetime = datetime(2023, 11, 1, tzinfo=UTC)
+_HIP3_LAUNCH: datetime = datetime(2025, 10, 13, tzinfo=UTC)
+
 
 class HyperliquidSource:
     """Primary source for native + HIP-3 perps.
@@ -78,10 +86,11 @@ class HyperliquidSource:
         return interval in _INTERVAL_MS and bool(symbol)
 
     def earliest_available(self, symbol: str, interval: str) -> datetime | None:
-        # Hyperliquid's retention varies per asset; we don't have a cheap probe.
-        # Caller can fall back on the earliest timestamp of a small historical
-        # probe if they need it. Returning None means "unknown".
-        return None
+        # Rough estimate — used by SourceRouter to decide where fallback
+        # sources (Binance, Coinbase) should fill in older history.
+        if ":" in symbol:
+            return _HIP3_LAUNCH
+        return _HL_LAUNCH
 
     def fetch_candles(
         self,
