@@ -1,12 +1,13 @@
 // Full chart workspace: symbol + interval pickers, backend-driven candle
-// fetch, lightweight-charts render, SVG markup overlay.
-// Phase 4 v0.1 ship + Phase 5 shell.
+// fetch, lightweight-charts render, SVG markup overlay. Live ticks come
+// directly from Hyperliquid's WebSocket (useHyperliquidCandles hook).
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CandleChart, type ChartCoords } from "../components/CandleChart";
 import { MarkupLayer } from "../components/MarkupLayer";
-import { candles, universe } from "../api/endpoints";
+import { candles, settings as settingsApi, universe } from "../api/endpoints";
+import { useHyperliquidCandles } from "../hooks/useHyperliquidCandles";
 import type { CandlesResponse, Market } from "../api/types";
 
 const INTERVALS = ["15m", "1h", "4h", "1d"] as const;
@@ -27,13 +28,43 @@ export function ChartsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [coords, setCoords] = useState<ChartCoords | null>(null);
+  const [testnet, setTestnet] = useState<boolean>(false);
 
   useEffect(() => {
     universe
       .list({ active_only: true, kind: "perp" })
       .then((r) => setMarkets(r.markets))
       .catch(() => undefined);
+    settingsApi
+      .get()
+      .then((s) => setTestnet(s.testnet))
+      .catch(() => undefined);
   }, []);
+
+  // Merge a single live bar into the chart data. Keyed on timestamp so
+  // partial-bar updates overwrite; a new bar appends.
+  const mergeLiveBar = useCallback((bar: {
+    timestamp: string; open: number; high: number; low: number;
+    close: number; volume: number; trades: number | null; source: string;
+  }) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const bars = prev.bars.slice();
+      const idx = bars.findIndex((b) => b.timestamp === bar.timestamp);
+      if (idx >= 0) {
+        bars[idx] = { ...bars[idx], ...bar };
+      } else {
+        bars.push(bar);
+        bars.sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1));
+      }
+      return { ...prev, bars, bar_count: bars.length };
+    });
+  }, []);
+
+  const liveStatus = useHyperliquidCandles({
+    symbol, interval, testnet, onCandle: mergeLiveBar,
+    enabled: Boolean(symbol),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +157,17 @@ export function ChartsPage() {
               <>
                 <Stat label="Last" value={last.close.toFixed(2)} />
                 <Stat label="Bars" value={(data?.bar_count ?? 0).toString()} />
+                <Stat
+                  label="Live"
+                  value={liveStatus.status}
+                  tone={
+                    liveStatus.status === "open"
+                      ? "pos"
+                      : liveStatus.status === "connecting"
+                        ? undefined
+                        : "neg"
+                  }
+                />
               </>
             ) : null}
           </div>
@@ -176,11 +218,19 @@ export function ChartsPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "pos" | "neg";
+}) {
   return (
     <div className="stat-inline">
       <div className="stat-inline__label">{label}</div>
-      <div className="stat-inline__value">{value}</div>
+      <div className={`stat-inline__value ${tone ? `tone--${tone}` : ""}`}>{value}</div>
     </div>
   );
 }
