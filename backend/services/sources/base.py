@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
@@ -23,6 +23,27 @@ CANDLE_COLUMNS: list[str] = [
 
 # Canonical interval strings. Not every source supports every interval.
 SUPPORTED_INTERVALS: tuple[str, ...] = ("1m", "5m", "15m", "1h", "4h", "1d", "1w")
+
+
+_INTERVAL_SECONDS: dict[str, int] = {
+    "1m": 60,
+    "5m": 5 * 60,
+    "15m": 15 * 60,
+    "1h": 60 * 60,
+    "4h": 4 * 60 * 60,
+    "1d": 24 * 60 * 60,
+    "1w": 7 * 24 * 60 * 60,
+}
+
+
+def interval_to_timedelta(interval: str) -> timedelta:
+    """Canonical interval string → timedelta.
+
+    Raises ``ValueError`` for unsupported intervals.
+    """
+    if interval not in _INTERVAL_SECONDS:
+        raise ValueError(f"Unsupported interval: {interval}")
+    return timedelta(seconds=_INTERVAL_SECONDS[interval])
 
 
 def empty_candle_frame() -> pd.DataFrame:
