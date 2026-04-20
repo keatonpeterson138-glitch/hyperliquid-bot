@@ -11,6 +11,9 @@ from backend.db.app_db import AppDB
 from backend.models.slot import Slot, SlotState
 
 
+_UNSET: Any = object()
+
+
 def _row_to_slot(row: Any) -> Slot:
     return Slot(
         id=row["id"],
@@ -137,35 +140,39 @@ class SlotRepository:
         self,
         slot_id: str,
         *,
-        last_tick_at: datetime | None = None,
-        last_signal: str | None = None,
-        last_decision_action: str | None = None,
-        current_position: str | None = None,
-        entry_price: float | None = None,
-        position_size_usd: float | None = None,
-        open_order_ids: list[str] | None = None,
+        last_tick_at: Any = _UNSET,
+        last_signal: Any = _UNSET,
+        last_decision_action: Any = _UNSET,
+        current_position: Any = _UNSET,
+        entry_price: Any = _UNSET,
+        position_size_usd: Any = _UNSET,
+        open_order_ids: Any = _UNSET,
     ) -> None:
+        """Upsert slot_state. Any field left as the sentinel ``_UNSET`` is
+        preserved from the existing row; passing explicit ``None`` clears it."""
         existing = self.get_state(slot_id)
-        merged_orders = open_order_ids if open_order_ids is not None else (
-            existing.open_order_ids if existing else []
-        )
+
+        def _resolve(new_value: Any, existing_value: Any) -> Any:
+            return existing_value if new_value is _UNSET else new_value
+
         merged = SlotState(
             slot_id=slot_id,
-            last_tick_at=last_tick_at or (existing.last_tick_at if existing else None),
-            last_signal=last_signal or (existing.last_signal if existing else None),
-            last_decision_action=last_decision_action or (
-                existing.last_decision_action if existing else None
+            last_tick_at=_resolve(last_tick_at, existing.last_tick_at if existing else None),
+            last_signal=_resolve(last_signal, existing.last_signal if existing else None),
+            last_decision_action=_resolve(
+                last_decision_action,
+                existing.last_decision_action if existing else None,
             ),
-            current_position=current_position if current_position is not None else (
-                existing.current_position if existing else None
+            current_position=_resolve(
+                current_position, existing.current_position if existing else None
             ),
-            entry_price=entry_price if entry_price is not None else (
-                existing.entry_price if existing else None
+            entry_price=_resolve(entry_price, existing.entry_price if existing else None),
+            position_size_usd=_resolve(
+                position_size_usd, existing.position_size_usd if existing else None
             ),
-            position_size_usd=position_size_usd if position_size_usd is not None else (
-                existing.position_size_usd if existing else None
+            open_order_ids=_resolve(
+                open_order_ids, existing.open_order_ids if existing else []
             ),
-            open_order_ids=merged_orders,
         )
         with self.db.transaction() as conn:
             conn.execute(

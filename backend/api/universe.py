@@ -35,12 +35,9 @@ def list_markets(
     return UniverseResponse(markets=[Market(**m) for m in markets])
 
 
-@router.get("/universe/{market_id:path}", response_model=Market)
-def get_market(market_id: str, um: UniverseDep) -> Market:
-    market = um.get(market_id)
-    if market is None:
-        raise HTTPException(status_code=404, detail=f"Market not found: {market_id}")
-    return Market(**market)
+# Specific routes MUST be declared before the catch-all `{market_id:path}` —
+# FastAPI matches in declaration order, and a path converter would otherwise
+# swallow `/universe/tag/...` and `/universe/refresh`.
 
 
 @router.post("/universe/refresh", response_model=RefreshResponse)
@@ -54,6 +51,20 @@ def refresh(um: UniverseDep) -> RefreshResponse:
     )
 
 
+@router.get("/universe/tag/{tag}", response_model=UniverseResponse)
+def markets_by_tag(tag: str, um: UniverseDep) -> UniverseResponse:
+    markets = um.markets_by_tag(tag)
+    return UniverseResponse(markets=[Market(**m) for m in markets])
+
+
+@router.get("/universe/{market_id:path}", response_model=Market)
+def get_market(market_id: str, um: UniverseDep) -> Market:
+    market = um.get(market_id)
+    if market is None:
+        raise HTTPException(status_code=404, detail=f"Market not found: {market_id}")
+    return Market(**market)
+
+
 @router.post("/universe/{market_id:path}/tag", status_code=204)
 def tag_market(market_id: str, req: TagRequest, um: UniverseDep) -> None:
     if um.get(market_id) is None:
@@ -64,9 +75,3 @@ def tag_market(market_id: str, req: TagRequest, um: UniverseDep) -> None:
 @router.delete("/universe/{market_id:path}/tag", status_code=204)
 def untag_market(market_id: str, req: TagRequest, um: UniverseDep) -> None:
     um.untag(market_id, req.tag)
-
-
-@router.get("/universe/tag/{tag}", response_model=UniverseResponse)
-def markets_by_tag(tag: str, um: UniverseDep) -> UniverseResponse:
-    markets = um.markets_by_tag(tag)
-    return UniverseResponse(markets=[Market(**m) for m in markets])
