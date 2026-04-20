@@ -1,21 +1,147 @@
-// Placeholder — Phase 4 ships the real lightweight-charts workspace.
+// Full chart workspace: symbol + interval pickers, backend-driven candle
+// fetch, lightweight-charts render. Phase 4 v0.1 ship.
+
+import { useEffect, useMemo, useState } from "react";
+
+import { CandleChart } from "../components/CandleChart";
+import { candles, universe } from "../api/endpoints";
+import type { CandlesResponse, Market } from "../api/types";
+
+const INTERVALS = ["15m", "1h", "4h", "1d"] as const;
+type Interval = (typeof INTERVALS)[number];
+
+const DEFAULT_LOOKBACK_DAYS: Record<Interval, number> = {
+  "15m": 7,
+  "1h": 30,
+  "4h": 120,
+  "1d": 730,
+};
 
 export function ChartsPage() {
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [symbol, setSymbol] = useState<string>("BTC");
+  const [interval, setInterval] = useState<Interval>("1h");
+  const [data, setData] = useState<CandlesResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    universe
+      .list({ active_only: true, kind: "perp" })
+      .then((r) => setMarkets(r.markets))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const lookbackDays = DEFAULT_LOOKBACK_DAYS[interval];
+    const to = new Date();
+    const from = new Date(to.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+
+    setLoading(true);
+    setError(null);
+    candles
+      .get(symbol, interval, from.toISOString(), to.toISOString())
+      .then((r) => {
+        if (!cancelled) setData(r);
+      })
+      .catch((e) => {
+        if (!cancelled) setError((e as Error).message);
+      })
+      .finally(() => !cancelled && setLoading(false));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, interval]);
+
+  const symbolOptions = useMemo(() => {
+    const items = markets.map((m) => m.symbol);
+    if (!items.includes(symbol)) items.unshift(symbol);
+    return items;
+  }, [markets, symbol]);
+
+  const last = data?.bars[data.bars.length - 1];
+
   return (
     <div className="page">
       <h1 className="page__title">Charts</h1>
+
       <section className="card">
-        <h2 className="card__title">Coming in v0.1 (Phase 4)</h2>
-        <p>
-          The real chart workspace ships in Phase 4: lightweight-charts price
-          pane, indicator subpanes (volume, RSI, MACD, ATR), live streaming via
-          WS, replay mode, 1/2/4-chart grid layouts.
-        </p>
-        <p className="muted">For now, query the data API directly:</p>
-        <pre className="code">
-          curl "http://127.0.0.1:8787/candles?symbol=BTC&interval=1h&from=2024-01-01"
-        </pre>
+        <div className="chart-toolbar">
+          <label className="field">
+            <span>Symbol</span>
+            <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
+              {symbolOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Interval</span>
+            <select
+              value={interval}
+              onChange={(e) => setInterval(e.target.value as Interval)}
+            >
+              {INTERVALS.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="chart-stats">
+            {loading ? (
+              <span className="muted">Loading…</span>
+            ) : last ? (
+              <>
+                <Stat label="Last" value={last.close.toFixed(2)} />
+                <Stat label="Bars" value={(data?.bar_count ?? 0).toString()} />
+              </>
+            ) : null}
+          </div>
+        </div>
+        {error ? <div className="error">{error}</div> : null}
+        <CandleChart data={data} height={480} />
       </section>
+
+      <section className="card">
+        <h2 className="card__title">Source breakdown</h2>
+        {data?.source_breakdown && Object.keys(data.source_breakdown).length > 0 ? (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Bars</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(data.source_breakdown).map(([src, n]) => (
+                <tr key={src}>
+                  <td>{src}</td>
+                  <td>{n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="muted">
+            No data in the local lake for {symbol}/{interval}. Run a backfill
+            via <code>python -m backend.tools.backfill --symbol {symbol}</code>.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stat-inline">
+      <div className="stat-inline__label">{label}</div>
+      <div className="stat-inline__value">{value}</div>
     </div>
   );
 }
