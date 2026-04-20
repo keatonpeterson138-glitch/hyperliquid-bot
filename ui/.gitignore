@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Tauri Rust build artefacts
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json

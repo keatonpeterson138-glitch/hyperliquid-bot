@@ -49,4 +49,28 @@ Carved the headless trading decision logic out of `dashboard.py` into a pure `Tr
 
 Next: wire `bot.py` to use `TradeEngine`, verify behavior parity, then dashboard.py migration.
 
+### Phase 0-B — backend/ FastAPI service + ui/ Tauri shell scaffold
+
+Stood up the new-home skeletons for both halves of the v1 app. Nothing is wired yet — these are structural placeholders so Phase 1+ code slots in without inventing layout as it goes.
+
+**Backend:**
+- NEW: `backend/__init__.py`, `backend/main.py` — FastAPI app factory (`create_app()`), version 0.2.0, mounts the `/health` router.
+- NEW: `backend/api/__init__.py`, `backend/api/health.py` — `GET /health` returns `{status, service, version}`. Used by the Tauri shell to detect sidecar liveness.
+- NEW: `backend/services/__init__.py`, `backend/models/__init__.py`, `backend/db/__init__.py` — placeholders for domain services (Phase 2+), Pydantic schemas, and persistence helpers (Parquet + DuckDB + SQLite, Phase 1+).
+- NEW: `tests/unit/backend/test_health.py` — two tests: factory mounts `/health`, and TestClient GET returns 200 with the right payload.
+- MODIFIED: `requirements.txt` — added `fastapi>=0.115.0`, `uvicorn[standard]>=0.32.0`, `pydantic>=2.9.0` (runtime) and `httpx>=0.27.0` (TestClient).
+
+**UI:**
+- NEW: `ui/package.json` — React 19 + Vite 6 + TS 5.6 + `@tauri-apps/api` v2, scripts for `dev`, `build`, `tauri:dev`, `tauri:build`.
+- NEW: `ui/vite.config.ts` — Tauri-friendly config: fixed port 5177, `127.0.0.1` host, ignore `src-tauri/` in watcher, esnext target, source maps, HMR.
+- NEW: `ui/tsconfig.json` + `ui/tsconfig.node.json` — strict TS with react-jsx transform.
+- NEW: `ui/index.html`, `ui/src/main.tsx`, `ui/src/App.tsx`, `ui/src/App.css`, `ui/src/vite-env.d.ts` — minimal dark-themed shell that probes `http://127.0.0.1:8787/health` on mount and renders status.
+- NEW: `ui/src-tauri/` — Rust Tauri shell skeleton: `Cargo.toml`, `tauri.conf.json` (product name, window 1440×900, identifier `com.hyperliquidbot.app`), `build.rs`, `src/main.rs`, `src/lib.rs` with `tauri_plugin_shell` loaded. Phase 2 adds sidecar spawning + keychain plugin + kill-switch global shortcut.
+- NEW: `ui/README.md` — developer setup (Node 20+, Rust, platform toolchains) + run commands.
+- NEW: `ui/.gitignore`, `ui/src-tauri/.gitignore` — `node_modules/`, `dist/`, `target/`, `Cargo.lock`.
+
+CI continues to run only `ruff check .` + `pytest` — no npm/cargo builds yet. UI build will join CI once the shell has real workspaces (Phase 3+).
+
+Ruff clean locally; 55 pytest tests passing after `fastapi` + `httpx` land in CI.
+
 ---

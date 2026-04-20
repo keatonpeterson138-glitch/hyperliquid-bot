@@ -1,0 +1,31 @@
+"""FastAPI application factory.
+
+Phase 0-B scaffold — just the app shell + health router. Feature routers
+(`/candles`, `/slots`, `/orders`, `/markups`, `/layouts`, `/backtest`,
+`/research`, `/models`, `/analog`, `/outcomes`, `/audit`, `/killswitch`,
+`/stream`) get wired in their respective phases.
+"""
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from backend.api import health
+
+
+def create_app() -> FastAPI:
+    """Build and return the FastAPI application.
+
+    Factory pattern so tests can construct a fresh app instance without
+    worrying about module-level singletons.
+    """
+    app = FastAPI(
+        title="Hyperliquid Bot Backend",
+        version="0.2.0",
+        description="Headless trading service for the Hyperliquid desktop app.",
+    )
+    app.include_router(health.router)
+    return app
+
+
+# Uvicorn entry point: `uvicorn backend.main:app`
+app = create_app()
