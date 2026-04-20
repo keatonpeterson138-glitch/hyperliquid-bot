@@ -73,6 +73,10 @@ export function CandleChart({ data, height = 480, onCoordsChange }: CandleChartP
         timeVisible: true,
         secondsVisible: false,
         borderColor: CHART_COLORS.grid,
+        // Thin bars — fits ~3x as many candles on screen as the default.
+        barSpacing: 2,
+        minBarSpacing: 0.5,
+        rightOffset: 6,
       },
       rightPriceScale: { borderColor: CHART_COLORS.grid },
       crosshair: { mode: 1 }, // magnet to nearest data point

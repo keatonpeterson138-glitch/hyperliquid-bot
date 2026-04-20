@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { BootstrapProgressCard } from "../components/BootstrapProgressCard";
 import { NewsPanel } from "../components/NewsPanel";
 import { TickerBar } from "../components/TickerBar";
 import { health, slots as slotsApi } from "../api/endpoints";
@@ -29,6 +30,8 @@ export function Dashboard() {
       <section className="card ticker-card">
         <TickerBar symbols={["BTC", "ETH", "SOL", "HYPE", "AVAX", "ARB"]} />
       </section>
+
+      <BootstrapProgressCard />
 
       <section className="card">
         <h2 className="card__title">Backend</h2>

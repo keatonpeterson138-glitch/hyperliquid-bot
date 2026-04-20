@@ -23,6 +23,7 @@ from backend.api import audit as audit_api
 from backend.api import (
     backtest as backtest_api,
 )
+from backend.api import bootstrap as bootstrap_api
 from backend.api import (
     candles,
     health,
@@ -130,6 +131,20 @@ def _wire_services(app: FastAPI) -> None:
         logger.warning("backfill service unavailable: %s", exc)
         backfill_service = None
 
+    # Macro seed — on a fresh install the lake is empty, which means the
+    # charts + ML training immediately run into "no data" dead-ends. The
+    # seed service kicks off a background batch backfill for a canonical
+    # macro-plus-crypto-majors set so the app has something real to show
+    # within a few minutes. Re-running the app skips slices already in
+    # the lake.
+    from backend.services.macro_seed import MacroSeedService
+    macro_seed = MacroSeedService(backfill_service)
+    if backfill_service is not None:
+        try:
+            macro_seed.ensure_started()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("macro seed startup failed: %s", exc)
+
     from backend.services.analog import AnalogEngine
     analog_engine = AnalogEngine(candle_query=_candle_query)
 
@@ -202,6 +217,7 @@ def _wire_services(app: FastAPI) -> None:
     app.dependency_overrides[markets_api.get_live_market] = lambda: live_market
     app.dependency_overrides[credentials_api.get_credentials_store] = lambda: credentials_store
     app.dependency_overrides[news_api.get_news_monitor] = lambda: news_monitor
+    app.dependency_overrides[bootstrap_api.get_macro_seed] = lambda: macro_seed
     app.dependency_overrides[analog_api.get_analog_engine] = lambda: analog_engine
     app.dependency_overrides[models_api.get_model_registry] = lambda: model_registry
     app.dependency_overrides[settings_api.get_settings_store] = lambda: settings_store
@@ -270,6 +286,7 @@ def create_app() -> FastAPI:
     app.include_router(markets_api.router)
     app.include_router(credentials_api.router)
     app.include_router(news_api.router)
+    app.include_router(bootstrap_api.router)
     app.include_router(stream_api.router)
     return app
 

@@ -232,6 +232,23 @@ export const news = {
     ),
 };
 
+export interface BootstrapStatus {
+  total: number;
+  done: number;
+  errors: number;
+  current: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  rows_total: number;
+  running: boolean;
+  errors_detail: Array<{ symbol: string; interval: string; error: string }>;
+}
+
+export const bootstrap = {
+  status: () => api.get<BootstrapStatus>("/bootstrap/status"),
+  start: () => api.post<BootstrapStatus>("/bootstrap/start"),
+};
+
 export const outcomes = {
   list: (params: { subcategory?: string; active_only?: boolean } = {}) => {
     const q = new URLSearchParams();
