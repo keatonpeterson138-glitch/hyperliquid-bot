@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../api/client";
 import { candles } from "../api/endpoints";
+import { LoadHistoryPanel } from "../components/LoadHistoryPanel";
 import type { CandlesResponse } from "../api/types";
 
 interface CatalogEntry {
@@ -34,6 +35,12 @@ export function DataLabPage() {
   const [filterInterval, setFilterInterval] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Show the Load Historical Data panel by default when the lake is
+  // empty — saves a click on first launch.
+  const [showLoader, setShowLoader] = useState(false);
+  useEffect(() => {
+    setShowLoader(entries.length === 0);
+  }, [entries.length]);
 
   const refreshCatalog = useCallback(() => {
     api
@@ -80,8 +87,8 @@ export function DataLabPage() {
             <h2 className="card__title">Lake overview</h2>
             <div className="muted small">
               Hive-partitioned Parquet under <code>data/parquet/ohlcv/</code>.
-              Auto-backfills on first chart open; fine-grained backfills
-              available below.
+              Use <b>Load historical data</b> below to bulk-pull, or click
+              an entry in the catalog to backfill a specific slice.
             </div>
           </div>
           <div className="outcome-header__stats">
@@ -89,9 +96,14 @@ export function DataLabPage() {
             <Stat label="(Sym × Interval)" value={String(entries.length)} />
             <Stat label="Total bars" value={totalBars.toLocaleString()} />
             <Stat label="≈ disk" value={`${totalMB.toFixed(1)} MB`} />
+            <button onClick={() => setShowLoader((v) => !v)}>
+              {showLoader ? "Hide loader" : "+ Load historical data"}
+            </button>
           </div>
         </div>
       </section>
+
+      {showLoader && <LoadHistoryPanel onComplete={refreshCatalog} />}
 
       <div className="outcomes-layout">
         <aside className="outcomes-board card">
