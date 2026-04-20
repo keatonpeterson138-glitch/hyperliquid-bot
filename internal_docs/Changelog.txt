@@ -73,4 +73,13 @@ CI continues to run only `ruff check .` + `pytest` — no npm/cargo builds yet. 
 
 Ruff clean locally; 55 pytest tests passing after `fastapi` + `httpx` land in CI.
 
+### Phase 1 + 2 implementation plans drafted
+
+Detailed commit-by-commit plans for the next two phases. Each plan traces files-created, interfaces exposed, data flows, test coverage, risks, and time estimates.
+
+- NEW: `internal_docs/PHASE_1_DATA_PLATFORM.md` (521 lines) — 10 commits over 2 weeks. DataSource protocol + adapters (Hyperliquid, Binance, Coinbase, yfinance), SourceRouter with stitching + cross-validation, Parquet writer/reader with Hive partitioning + dedupe, DuckDB catalog + query layer, backfill CLI, incremental updater, REST + WS APIs (`/candles`, `/catalog`, `/backfill`, `/stream`), HIP-4 outcome tape. Full storage layout, schemas, and three end-to-end data-flow diagrams (backfill, live stream, query).
+- NEW: `internal_docs/PHASE_2_BACKEND_ENGINE.md` (833 lines) — 8 commits over 2 weeks. UniverseManager for dynamic Hyperliquid market discovery, full SQLite schema (markets, market_tags, audit_log with append-only triggers, slots, slot_state), KeyVault wrapping OS keychain with `.env` fallback gated on DEV_MODE, AuditService with CSV export, KillSwitchService with fat-finger guard + per-step audit, TradeEngineService orchestrator + SlotRunner wrapping the pure `engine.py`, OrderExecutor for Decision→exchange translation, full REST + WS for slots/orders/positions/balance, ShadowClient for testnet parallel execution with divergence alerts. Three end-to-end data-flow diagrams (slot-start, kill-switch cascade, shadow divergence).
+
+Both plans flag risks (Hyperliquid SDK rate limits, yfinance instability, keyring-in-CI, thread races) with concrete mitigations, and call out open decisions. Total combined: 18 commits, ~5,000 LOC budget for the two phases.
+
 ---
