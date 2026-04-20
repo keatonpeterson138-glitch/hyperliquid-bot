@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from backend.api import health
+from backend.api import candles, health
 
 
 def create_app() -> FastAPI:
@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
         description="Headless trading service for the Hyperliquid desktop app.",
     )
     app.include_router(health.router)
+    app.include_router(candles.router)
     return app
 
 
