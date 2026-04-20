@@ -1,0 +1,22 @@
+# Hyperliquid Bot Changelog
+
+> **For developers (human and AI):** This log is append-only. When making changes to the codebase, add a new dated entry at the bottom summarizing what was changed and why. Use the format shown below. Do not edit or remove previous entries.
+
+---
+
+## 2026-04-20
+
+### Project forked + housekeeping established
+
+Forked `kdp1005/hyperliquid-bot` to `keatonpeterson138-glitch/hyperliquid-bot`. Established the project-documentation conventions borrowed from StruxDraft (CLAUDE.md, Design.md, Changelog.txt, path_to_v1.md) so AI assistants can navigate the codebase and continue the overhaul work without re-reading every file.
+
+- NEW: `CLAUDE.md` — primary AI-assistant reference. Project overview, commands, directory layout, strategy contract, Hyperliquid market universe snapshot, risk-management roadmap, conventions, and overhaul status table.
+- NEW: `internal_docs/Design.md` — technical design document with 18 numbered sections covering product vision, trading basis, current architecture, target architecture, data layer, strategy contract, exchange integration, risk management, HIP-4 handling, research + ML pipeline, analog search, UI architecture, testing philosophy, conventions, and glossary.
+- NEW: `internal_docs/Changelog.txt` — append-only change log (this file).
+- NEW: `internal_docs/OVERHAUL_PLAN.md` — full v1.0 platform overhaul plan (1,016 lines, 18 sections): dynamic Hyperliquid market universe, max-depth stitched historical data, Tauri + React + FastAPI architecture, TradingView-style charts with interactive markup-to-order integration, HIP-4 outcome workspace as first-class v1 surface, analog / pattern search subsystem (DTW + learned embedding + FAISS), ML training pipeline with purged k-fold CV, mainnet hardening spec (OS keychain, kill switch, exposure cap, confirmation modals, audit log, shadow mode), 12-phase roadmap over 24 weeks.
+- NEW: `todo/path_to_v1.md` — phase-by-phase status tracker mirroring StruxDraft's `path_to_beta.md` format with 🔴 / 🟡 / 🟢 status per phase and per initiative.
+- MODIFIED: `README.md` — rewritten to reflect current scope (Hyperliquid perps + HIP-3 + HIP-4) and the overhaul roadmap. Old README described a minimal ETH-only bot; new README documents the ~15 stocks, indices (SP500, XYZ100), commodities, and prediction-market capabilities plus the v1.0 plan.
+
+No code changes. Next commit: Phase 0 scaffolding (repo layout, CI workflow, first extracted `TradeEngine`).
+
+---

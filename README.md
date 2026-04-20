@@ -1,233 +1,190 @@
 # Hyperliquid Trading Bot
 
-A fully-featured automated trading bot for Hyperliquid perpetual futures exchange with configurable strategies, risk management, and clean architecture.
+Automated perpetual futures + prediction-market trading bot for [Hyperliquid](https://hyperliquid.xyz/), with configurable strategies, multi-slot position management, risk management, and real-time notifications.
+
+**Status:** Undergoing a platform overhaul. See [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) for the v1.0 roadmap.
+
+## Supported Markets
+
+- **Native Hyperliquid perps** — BTC, ETH, SOL, HYPE, and ~100 other crypto perps.
+- **HIP-3 builder-deployed perps** (via `trade.xyz` and other deployers):
+  - **Stocks:** NVDA, TSLA, AAPL, MSFT, GOOGL, AMZN, META, HOOD, INTC, PLTR, COIN, NFLX, MSTR, AMD, TSM
+  - **Indices:** SP500 (S&P-licensed, up to 50×), XYZ100 (Nasdaq-100)
+  - **Commodities:** gold, silver, crude oil, corn, wheat
+  - **FX** pairs
+- **HIP-4 outcome contracts** — prediction markets (testnet live; mainnet rolling out).
 
 ## Features
 
-- **Multiple Trading Strategies:**
-  - EMA Crossover (fast/slow moving average crossover)
-  - RSI Mean Reversion (oversold/overbought signals)
-  - Breakout (support/resistance level breaks)
+### Trading
+- Multiple built-in strategies: EMA crossover, RSI mean reversion, breakout, funding dip, outcome-market arbitrage.
+- Up to **5 concurrent position slots**, each with its own symbol / interval / strategy / risk parameters.
+- Per-slot filters: trailing stops, multi-timeframe confirmation, regime filter, ATR stops, loss cooldown, volume confirm, RSI guard.
+- Timeframe-preset SL/TP/leverage recommendations (1m scalp → 1d position).
 
-- **Risk Management:**
-  - Configurable stop-loss and take-profit levels
-  - Maximum position limits
-  - Daily loss limits with automatic trading pause
-  - Position size control
+### Risk Management
+- Stop-loss and take-profit per position.
+- Daily loss circuit breaker.
+- Max open positions cap.
+- Mainnet + testnet support.
 
-- **Exchange Integration:**
-  - Full Hyperliquid API integration
-  - Testnet and mainnet support
-  - Real-time position tracking
-  - Market and limit order execution
+### Prediction Markets (HIP-4)
+- Outcome contract discovery and pricing.
+- `outcome_arb` strategy for theoretical-vs-market edge trading.
+- Real-time monitoring and event tracking.
 
-- **Monitoring:**
-  - Detailed logging of all trades and signals
-  - Real-time P&L tracking
-  - Position monitoring
+### Notifications
+- Email alerts (SMTP).
+- Telegram bot alerts.
 
-## Project Structure
-
-```
-hyperliquid-bot/
-├── bot.py                    # Main bot entrypoint
-├── config.py                 # Configuration loader
-├── requirements.txt          # Python dependencies
-├── .env.example             # Environment configuration template
-├── core/
-│   ├── __init__.py
-│   ├── exchange.py          # Hyperliquid exchange client
-│   ├── market_data.py       # Market data fetcher
-│   └── risk_manager.py      # Risk management
-└── strategies/
-    ├── __init__.py
-    ├── base.py              # Base strategy class
-    ├── ema_crossover.py     # EMA crossover strategy
-    ├── rsi_mean_reversion.py # RSI mean reversion strategy
-    ├── breakout.py          # Breakout strategy
-    └── factory.py           # Strategy factory
-```
+### UI
+- Current: Tkinter desktop dashboard (`dashboard.py`) — slot manager, live P&L, predictions board, news, logs, settings.
+- Planned for v1.0: Tauri + React desktop app with TradingView-style charts, drawing tools, backtest lab, ML training, analog/pattern search, mainnet-grade hardening.
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Install
 
-```powershell
-cd C:\Users\kdpet\hyperliquid-bot
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 2. Configure
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Copy `.env.example` to `.env` and set:
 
-```powershell
-cp .env.example .env
-```
-
-Edit `.env` with your settings:
-
-```env
-# Your Hyperliquid wallet private key (hex, without 0x prefix)
-PRIVATE_KEY=your_private_key_here
-
-# Your wallet address
-WALLET_ADDRESS=0xYourWalletAddressHere
-
-# Use testnet (recommended for testing)
-USE_TESTNET=true
-
-# Trading parameters
-SYMBOL=ETH
-POSITION_SIZE_USD=100
-MAX_LEVERAGE=5
+```ini
+PRIVATE_KEY=<your wallet private key, no 0x prefix>
+WALLET_ADDRESS=0x...
+USE_TESTNET=true        # start on testnet!
+SYMBOL=BTC
 STRATEGY=ema_crossover
-
-# Risk management
-STOP_LOSS_PCT=2.0
-TAKE_PROFIT_PCT=4.0
-MAX_OPEN_POSITIONS=3
-MAX_DAILY_LOSS_USD=500
-
-# Intervals
-CANDLE_INTERVAL=15m
-LOOP_INTERVAL_SEC=15
+CANDLE_INTERVAL=1h
+POSITION_SIZE_USD=100
+MAX_LEVERAGE=3
 ```
 
-### 3. Run the Bot
+For HIP-3 markets, use the `dex:symbol` format (e.g. `SYMBOL=xyz:TSLA`, `SYMBOL=cash:GOLD`) and set `DEX=xyz` or `DEX=cash` accordingly.
 
-```powershell
+For multi-slot, configure `SLOT_1`..`SLOT_5` via the Settings tab in the dashboard, or edit `.env` directly:
+
+```
+SLOT_1=BTC|1h|ema_crossover|2.0|4.0|3|true|1000|{}|false|true|false|false|true|false|false|30|70
+```
+
+### 3. Run
+
+CLI single-slot loop:
+
+```bash
 python bot.py
 ```
 
-## Available Strategies
+Desktop dashboard (recommended):
 
-### 1. EMA Crossover (`ema_crossover`)
-- **Logic:** Buys when fast EMA crosses above slow EMA, sells when it crosses below
-- **Parameters:** Fast period (9), Slow period (21)
-- **Best for:** Trending markets
-
-### 2. RSI Mean Reversion (`rsi_mean_reversion`)
-- **Logic:** Buys when RSI < 30 (oversold), sells when RSI > 70 (overbought)
-- **Parameters:** RSI period (14), oversold (30), overbought (70)
-- **Best for:** Range-bound markets
-
-### 3. Breakout (`breakout`)
-- **Logic:** Buys on resistance break, sells on support break
-- **Parameters:** Lookback period (20), breakout threshold (0.5%)
-- **Best for:** Volatile markets with clear support/resistance
-
-## Configuration Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `PRIVATE_KEY` | Your wallet private key | Required |
-| `WALLET_ADDRESS` | Your wallet address | Required |
-| `USE_TESTNET` | Use testnet (true/false) | true |
-| `SYMBOL` | Trading symbol (ETH, BTC, SOL, etc.) | ETH |
-| `POSITION_SIZE_USD` | Position size in USD | 100 |
-| `MAX_LEVERAGE` | Maximum leverage (1-50) | 5 |
-| `STRATEGY` | Strategy to use | ema_crossover |
-| `STOP_LOSS_PCT` | Stop-loss percentage | 2.0 |
-| `TAKE_PROFIT_PCT` | Take-profit percentage | 4.0 |
-| `MAX_OPEN_POSITIONS` | Max concurrent positions | 3 |
-| `MAX_DAILY_LOSS_USD` | Max daily loss before pause | 500 |
-| `CANDLE_INTERVAL` | Candle timeframe (1m/5m/15m/1h/4h/1d) | 15m |
-| `LOOP_INTERVAL_SEC` | Bot loop interval in seconds | 15 |
-
-## Safety Features
-
-1. **Stop-Loss Protection:** Automatically closes positions when loss exceeds configured percentage
-2. **Take-Profit Targets:** Locks in profits when target is reached
-3. **Daily Loss Limits:** Pauses trading if daily loss exceeds threshold
-4. **Position Limits:** Prevents over-leveraging with max position count
-5. **Testnet Support:** Test strategies risk-free on Hyperliquid testnet
-
-## Getting Your Hyperliquid Credentials
-
-### For Testnet (Recommended for Testing):
-1. Visit [Hyperliquid Testnet](https://app.hyperliquid-testnet.xyz/)
-2. Create a new wallet or import existing one
-3. Get testnet funds from the faucet
-4. Export your private key from wallet settings
-
-### For Mainnet (Real Trading):
-1. Visit [Hyperliquid](https://app.hyperliquid.xyz/)
-2. Connect your wallet (MetaMask, WalletConnect, etc.)
-3. Deposit funds
-4. Export your private key (**Keep this secure!**)
-
-⚠️ **Security Warning:** Never share your private key. Never commit it to git. Use testnet for development.
-
-## Monitoring Your Bot
-
-The bot logs all activity in real-time:
-
-```
-2026-02-16 14:30:00 [INFO] Signal: LONG (strength=0.85) | Bullish EMA crossover
-2026-02-16 14:30:02 [INFO] ✓ LONG position opened
-2026-02-16 14:30:45 [INFO] Current LONG position | Entry: $2500.00 | Current: $2510.00 | PnL: $8.50
+```bash
+python dashboard.py
 ```
 
-## Adding Custom Strategies
+### 4. Test Setup
 
-Create a new strategy by extending `BaseStrategy`:
+Before running live:
+
+```bash
+python test_setup.py    # verify credentials and exchange connectivity
+python test_trade.py    # place + cancel a test order (testnet only)
+```
+
+## Strategies
+
+| Name | Logic | Best For |
+|---|---|---|
+| `ema_crossover` | Buy when fast EMA crosses above slow; sell when it crosses below | Trending markets |
+| `rsi_mean_reversion` | Buy oversold (RSI < 30), sell overbought (RSI > 70) | Range-bound markets |
+| `breakout` | Buy on resistance break, sell on support break | Volatile markets with defined S/R |
+| `funding_dip` | Fade extreme funding-rate moves on perps | Overheated / crashing funding |
+| `outcome_arb` | HIP-4 prediction-market edge vs theoretical pricing model | Prediction markets |
+
+Each strategy extends `BaseStrategy` in `strategies/base.py`. Add your own by subclassing and registering in `strategies/factory.py`:
 
 ```python
-# strategies/my_strategy.py
-from .base import BaseStrategy, Signal, SignalType
-
 class MyStrategy(BaseStrategy):
-    def analyze(self, df, current_position=None):
-        # Your strategy logic here
-        return Signal(SignalType.LONG, strength=0.8, reason="My custom signal")
+    def analyze(self, df, current_position=None) -> Signal:
+        # your logic
+        return Signal(SignalType.LONG, strength=0.8, reason="my signal")
 ```
 
-Register it in `strategies/factory.py`:
+## Configuration Reference
 
-```python
-'my_strategy': lambda: MyStrategy(),
+| Variable | Default | Description |
+|---|---|---|
+| `PRIVATE_KEY` | (required) | Wallet private key, hex, no `0x` prefix |
+| `WALLET_ADDRESS` | (required) | Wallet address |
+| `USE_TESTNET` | `true` | Testnet (recommended while testing) |
+| `DEX` | `''` | HIP-3 dex (`''`, `cash`, `xyz`, …) |
+| `SYMBOL` | `BTC` | Market symbol |
+| `STRATEGY` | `ema_crossover` | Strategy name |
+| `CANDLE_INTERVAL` | `1h` | `1m`, `5m`, `15m`, `1h`, `4h`, `1d` |
+| `POSITION_SIZE_USD` | `100` | Position size |
+| `MAX_LEVERAGE` | `5` | 1–50 |
+| `STOP_LOSS_PCT` | `2.0` | Stop-loss % |
+| `TAKE_PROFIT_PCT` | `4.0` | Take-profit % |
+| `MAX_OPEN_POSITIONS` | `3` | Max concurrent positions |
+| `MAX_DAILY_LOSS_USD` | `500` | Daily loss circuit breaker |
+| `LOOP_INTERVAL_SEC` | `15` | Poll interval |
+| `EMAIL_ENABLED` / `TELEGRAM_ENABLED` | `false` | Notifications toggle |
+| `SLOT_1`..`SLOT_5` | empty | Multi-slot pipe-separated config |
+
+## Project Layout
+
 ```
+hyperliquid-bot/
+├── bot.py                    ← CLI single-slot entrypoint
+├── dashboard.py              ← Tkinter desktop dashboard (current UI)
+├── config.py                 ← .env loader + slot parser
+├── core/                     ← exchange + infra (reused in v1 overhaul)
+├── strategies/               ← strategy plugins
+├── gui/                      ← Tkinter tabs (v1 replaces with Tauri)
+├── scripts/                  ← one-off ops utilities
+├── internal_docs/            ← design + planning docs
+├── todo/                     ← phase trackers + backlog
+└── test_setup.py / test_trade.py  ← manual verification scripts
+```
+
+## Documentation
+
+- [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) — v1.0 architecture + 12-phase roadmap.
+- [`internal_docs/Design.md`](internal_docs/Design.md) — product vision, trading basis, and subsystem overview.
+- [`internal_docs/Changelog.txt`](internal_docs/Changelog.txt) — append-only change log.
+- [`todo/path_to_v1.md`](todo/path_to_v1.md) — phase-by-phase status tracker.
+- [`CLAUDE.md`](CLAUDE.md) — AI-assistant quick reference.
+
+## Safety
+
+- **Always test on testnet first.** Hyperliquid testnet has a faucet (`python -m scripts.testnet_faucet`).
+- **Never commit `.env`, private keys, or credentials.** `.env` is in `.gitignore`.
+- **Start small on mainnet.** Position sizing and daily-loss caps exist for a reason — use them.
+- **Review fills regularly.** The audit log (planned in Phase 2) will make this easier.
 
 ## Troubleshooting
 
-**"Configuration errors: PRIVATE_KEY must be set"**
-- Make sure you copied `.env.example` to `.env` and filled in your credentials
-
-**"Failed to get market price"**
-- Check your internet connection
-- Verify the symbol exists on Hyperliquid (e.g., 'ETH', 'BTC', 'SOL')
-
-**"Max positions limit reached"**
-- Increase `MAX_OPEN_POSITIONS` in `.env` or close existing positions
-
-**Orders not executing:**
-- Ensure you have sufficient balance in your account
-- Check leverage settings (Hyperliquid max is 50x)
-- Verify you're using the correct network (testnet vs mainnet)
+- **"Configuration errors: PRIVATE_KEY must be set"** — copy `.env.example` to `.env` and fill in credentials.
+- **"Failed to get market price"** — check internet and that the symbol exists (use `python discover_markets.py` to list available markets).
+- **"Max positions limit reached"** — bump `MAX_OPEN_POSITIONS` or close existing positions.
+- **Orders not executing** — confirm sufficient balance, correct leverage (Hyperliquid max 50×), correct network (testnet vs mainnet).
+- **HIP-3 symbol not recognized** — HIP-3 symbols require `dex:symbol` format (e.g. `xyz:TSLA`). Set `DEX=xyz` in `.env`.
 
 ## Disclaimer
 
-⚠️ **WARNING:** This bot is for educational purposes. Cryptocurrency trading carries significant risk. 
+This bot is for educational and research purposes. Cryptocurrency and equity-perp trading carry significant risk.
 
-- **Test thoroughly on testnet before using real funds**
-- **Never invest more than you can afford to lose**
-- **Past performance does not guarantee future results**
-- **The developers are not responsible for any financial losses**
+- Test thoroughly on testnet before deploying real funds.
+- Never invest more than you can afford to lose.
+- Past performance does not guarantee future results.
+- The developers are not responsible for any financial losses.
 
-Use at your own risk!
+Use at your own risk.
 
 ## License
 
-MIT License - Use freely, but at your own risk.
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section above
-2. Review Hyperliquid documentation: https://hyperliquid.gitbook.io/
-3. Ensure all dependencies are installed correctly
-
----
-
-**Happy Trading! 🚀**
+MIT.
