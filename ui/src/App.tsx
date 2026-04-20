@@ -2,11 +2,15 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { Sidebar } from "./components/Sidebar";
 import { Titlebar } from "./components/Titlebar";
+import { AnalogPage } from "./pages/AnalogPage";
 import { AuditPage } from "./pages/AuditPage";
+import { BacktestPage } from "./pages/BacktestPage";
 import { ChartsPage } from "./pages/Charts";
 import { Dashboard } from "./pages/Dashboard";
+import { ModelsPage } from "./pages/ModelsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { OutcomesPage } from "./pages/Outcomes";
+import { ResearchPage } from "./pages/ResearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SlotsPage } from "./pages/SlotsPage";
 import { UniversePage } from "./pages/Universe";
@@ -29,6 +33,10 @@ export default function App() {
               <Route path="/slots" element={<SlotsPage />} />
               <Route path="/universe" element={<UniversePage />} />
               <Route path="/outcomes" element={<OutcomesPage />} />
+              <Route path="/research" element={<ResearchPage />} />
+              <Route path="/backtest" element={<BacktestPage />} />
+              <Route path="/analog" element={<AnalogPage />} />
+              <Route path="/models" element={<ModelsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/vault" element={<VaultPage />} />

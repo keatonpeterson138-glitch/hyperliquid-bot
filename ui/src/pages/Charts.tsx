@@ -6,18 +6,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CandleChart, type ChartCoords } from "../components/CandleChart";
 import { MarkupLayer } from "../components/MarkupLayer";
-import { candles, settings as settingsApi, universe } from "../api/endpoints";
+import { candles, markets as marketsApi, settings as settingsApi, universe } from "../api/endpoints";
 import { useHyperliquidCandles } from "../hooks/useHyperliquidCandles";
 import type { CandlesResponse, Market } from "../api/types";
 
-const INTERVALS = ["15m", "1h", "4h", "1d"] as const;
+const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "8h", "1d", "1w"] as const;
 type Interval = (typeof INTERVALS)[number];
 
 const DEFAULT_LOOKBACK_DAYS: Record<Interval, number> = {
+  "1m": 1,
+  "5m": 3,
   "15m": 7,
+  "30m": 14,
   "1h": 30,
   "4h": 120,
+  "8h": 240,
   "1d": 730,
+  "1w": 1460,
 };
 
 export function ChartsPage() {
@@ -31,10 +36,47 @@ export function ChartsPage() {
   const [testnet, setTestnet] = useState<boolean>(false);
 
   useEffect(() => {
-    universe
-      .list({ active_only: true, kind: "perp" })
-      .then((r) => setMarkets(r.markets))
-      .catch(() => undefined);
+    // Prefer the live Hyperliquid meta (always populated) and fall back
+    // to the local universe catalog (might be empty on first run if
+    // UniverseManager.refresh() hasn't fired yet).
+    marketsApi
+      .meta()
+      .then((r) => {
+        const raw = r.raw as { universe?: Array<{ name?: string }> };
+        const fromMeta = (raw.universe ?? [])
+          .map((u) => u.name)
+          .filter((n): n is string => !!n)
+          .map((name) => ({
+            id: `perp:${name}`,
+            kind: "perp",
+            symbol: name,
+            dex: "",
+            base: name,
+            category: "crypto",
+            subcategory: null,
+            max_leverage: null,
+            sz_decimals: null,
+            tick_size: null,
+            min_size: null,
+            resolution_date: null,
+            bounds: null,
+            active: true,
+            first_seen: null,
+            last_seen: null,
+            tags: [],
+          })) as Market[];
+        if (fromMeta.length > 0) {
+          setMarkets(fromMeta);
+          return;
+        }
+        return universe.list({ active_only: true, kind: "perp" }).then((u) => setMarkets(u.markets));
+      })
+      .catch(() =>
+        universe
+          .list({ active_only: true, kind: "perp" })
+          .then((u) => setMarkets(u.markets))
+          .catch(() => undefined),
+      );
     settingsApi
       .get()
       .then((s) => setTestnet(s.testnet))

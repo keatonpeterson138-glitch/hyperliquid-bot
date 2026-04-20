@@ -50,7 +50,9 @@ BackfillServiceDep = Annotated[BackfillService, Depends(get_backfill_service)]
 # Approximate bars-per-interval — used to decide "is this range empty
 # enough to auto-fetch?" Compared against what the lake actually returns.
 _INTERVAL_MINUTES = {
-    "1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440,
+    "1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30,
+    "1h": 60, "2h": 120, "4h": 240, "8h": 480, "12h": 720,
+    "1d": 1440, "3d": 4320, "1w": 10080, "1M": 43200,
 }
 
 
@@ -102,7 +104,7 @@ def _df_to_response(df: pd.DataFrame, symbol: str, interval: str) -> CandlesResp
 def get_candles(
     catalog: CatalogDep,
     symbol: Annotated[str, Query(min_length=1)],
-    interval: Annotated[str, Query(pattern="^(1m|5m|15m|1h|4h|1d)$")],
+    interval: Annotated[str, Query(pattern="^(1m|3m|5m|15m|30m|1h|2h|4h|8h|12h|1d|3d|1w|1M)$")],
     from_: Annotated[datetime, Query(alias="from")],
     to: datetime | None = None,
     source: str | None = None,
@@ -141,7 +143,7 @@ def refresh_candles(
     catalog: CatalogDep,
     service: BackfillServiceDep,
     symbol: Annotated[str, Query(min_length=1)],
-    interval: Annotated[str, Query(pattern="^(1m|5m|15m|1h|4h|1d)$")],
+    interval: Annotated[str, Query(pattern="^(1m|3m|5m|15m|30m|1h|2h|4h|8h|12h|1d|3d|1w|1M)$")],
     hours: Annotated[int, Query(ge=1, le=720)] = 48,
 ) -> CandlesResponse:
     """Pull the most recent ``hours`` and return the tail.

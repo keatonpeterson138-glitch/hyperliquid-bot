@@ -89,7 +89,7 @@ class TestCandlesEndpoint:
             "/candles",
             params={
                 "symbol": "BTC",
-                "interval": "3m",
+                "interval": "7m",
                 "from": "2024-01-01T00:00:00Z",
             },
         )
@@ -188,7 +188,7 @@ class TestBackfillEndpoint:
             "/backfill",
             json={
                 "symbol": "BTC",
-                "interval": "3m",  # rejected
+                "interval": "7m",  # rejected
                 "start": "2024-01-01T00:00:00Z",
             },
         )
