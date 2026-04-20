@@ -8,7 +8,7 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 0 — 🔴 Foundation (1 week)
+## Phase 0 — 🟡 Foundation (1 week)
 
 **Goal:** Clean base for everything else; `bot.py` still works; `dashboard.py` keeps running until Phase 3 replaces it.
 
@@ -17,11 +17,11 @@ _Last audited: 2026-04-20._
 - [ ] Split `dashboard.py` (2,431 LOC Tkinter monolith) into `engine.py` + `state.py` + `view.py`. The engine portion becomes the headless `TradeEngine` consumed by both `bot.py` and the v1 backend.
 - [ ] Create `backend/` package (`api/`, `services/`, `models/`, `db/`, `main.py`) with FastAPI skeleton.
 - [ ] Create `ui/` Tauri + React + Vite + TypeScript project skeleton.
-- [ ] Add deps to `requirements.txt`: `fastapi`, `uvicorn`, `duckdb`, `pyarrow`, `sqlalchemy`, `alembic`, `joblib`, `xgboost`, `scikit-learn`, `faiss-cpu`, `dtaidistance`, `cryptography`, `keyring`, `pytest`, `pytest-asyncio`, `httpx`.
-- [ ] Add `pyproject.toml` + `pytest` + `ruff` + `mypy` config.
-- [ ] Add `.github/workflows/ci.yml` — lint + type-check + pytest on push.
-- [ ] Create `tests/` directory scaffolding mirroring source layout.
-- [ ] Land first golden-signal test per strategy: OHLCV fixture → expected `Signal` stream. Gate the merge pipeline on no-drift.
+- [x] Add dev/test deps to `requirements.txt`: `pytest>=8.0.0`, `pytest-asyncio>=0.23.0`, `ruff>=0.5.0`. Remaining v1 deps (`fastapi`, `uvicorn`, `duckdb`, `pyarrow`, `sqlalchemy`, `alembic`, `joblib`, `xgboost`, `scikit-learn`, `faiss-cpu`, `dtaidistance`, `cryptography`, `keyring`, `httpx`) to be added with the phases that need them.
+- [x] Add `pyproject.toml` with `pytest` + `ruff` config (mypy deferred until type-hint pass).
+- [x] Add `.github/workflows/ci.yml` — `ruff check` + `pytest -v` on push/PR.
+- [x] Create `tests/` directory scaffolding mirroring source layout.
+- [x] Land golden-signal tests per strategy (33 tests covering ema_crossover / rsi_mean_reversion / breakout / funding_dip / factory). Gate the merge pipeline on no-drift via CI. `outcome_arb` deferred (network dependency).
 
 **Blocks:** Phase 1+ (data platform needs the `backend/` scaffolding).
 

@@ -3,6 +3,17 @@
 *.env
 !.env.example
 
+# Testing and tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Local data lake (parquet + sqlite + models + analog indices)
+data/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -19,4 +19,21 @@ Forked `kdp1005/hyperliquid-bot` to `keatonpeterson138-glitch/hyperliquid-bot`. 
 
 No code changes. Next commit: Phase 0 scaffolding (repo layout, CI workflow, first extracted `TradeEngine`).
 
+### Phase 0 kickoff — golden-signal test suite + CI
+
+Laid the verification wall for the overhaul. Any refactor that drifts strategy behavior now breaks the suite.
+
+- NEW: `pyproject.toml` — project metadata, `pytest` config (testpaths, strict markers, deprecation-warning filters), `ruff` config (110-col line length, py312 target, standard rule set).
+- NEW: `tests/conftest.py` — deterministic OHLCV builder (`make_ohlcv`) + 11 strategy fixtures covering bullish/bearish/flat/insufficient-data cases for EMA, RSI, and breakout.
+- NEW: `tests/unit/strategies/test_ema_crossover.py` — 7 tests covering insufficient-data guard, fresh bullish + bearish crosses, position-already-open holds, flat-series hold, and parameterized custom periods.
+- NEW: `tests/unit/strategies/test_rsi_mean_reversion.py` — 7 tests covering oversold/overbought signals, position-open holds, neutral RSI, and custom threshold overrides.
+- NEW: `tests/unit/strategies/test_breakout.py` — 6 tests covering bullish/bearish breakouts, position-open holds, and rangebound holds.
+- NEW: `tests/unit/strategies/test_funding_dip.py` — 6 tests with `unittest.mock.patch` freezing `datetime.now(UTC)` to exercise clock-driven entry/exit windows.
+- NEW: `tests/unit/strategies/test_factory.py` — 7 tests: default construction for the three pure-pandas strategies, param overrides, string→numeric coercion, unknown-name ValueError, case-insensitive matching. `outcome_arb` skipped (network dependency).
+- NEW: `.github/workflows/ci.yml` — push + PR gate running `ruff check` + `pytest -v` on Python 3.12 / Ubuntu.
+- MODIFIED: `requirements.txt` — added `pytest>=8.0.0`, `pytest-asyncio>=0.23.0`, `ruff>=0.5.0` under a "Dev / test" section.
+- MODIFIED: `.gitignore` — added `.pytest_cache/`, `.ruff_cache/`, `.mypy_cache/`, `.coverage`, `htmlcov/`, `.tox/`, and `data/` (local parquet/sqlite lake — never committed).
+
+33 tests total. Built without local Python tooling (apt-gated) — first CI run verifies.
+
 ---
