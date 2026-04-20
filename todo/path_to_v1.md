@@ -27,22 +27,22 @@ _Last audited: 2026-04-20._
 
 ---
 
-## Phase 1 — 🔴 Data Platform (2 weeks)
+## Phase 1 — 🟢 Data Platform (2 weeks)
 
 **Goal:** Pull, store, query historical OHLCV + outcome tapes for the full Hyperliquid universe, stitched across multiple sources for maximum depth.
 
 **Tasks**
 
-- [ ] Source adapters: `HyperliquidSource`, `BinanceSource`, `CoinbaseSource`, `CryptoCompareSource`, `YFinanceSource` (+ optional `PolygonSource`).
-- [ ] `DataSource` protocol + `SourceRouter.plan(symbol, interval, start, end)` returning stitched `(source, slice)` tuples.
-- [ ] Parquet writer with Hive partitioning: `data/parquet/ohlcv/symbol=<s>/interval=<i>/year=<y>/part-000.parquet`.
-- [ ] DuckDB catalog: `data/duckdb/catalog.db` with views over Parquet files + partition pruning.
-- [ ] Outcome tape storage: `data/parquet/outcomes/market_id=<id>/year=<y>/part-000.parquet`.
-- [ ] Backfill CLI: `python -m backend.tools.backfill --target all --depth max`.
-- [ ] Incremental updater daemon: tail latest bar into Parquet every interval.
-- [ ] Cross-validate mode: pull from two sources in parallel, alert on divergence > threshold.
-- [ ] REST: `GET /candles`, `GET /catalog`, `POST /backfill`, WS `/stream/backfill/{job_id}`.
-- [ ] Dedupe key: `(symbol, interval, timestamp, source)`. Last-write-wins per ingestion.
+- [x] Source adapters: `HyperliquidSource`, `BinanceSource`, `CoinbaseSource`, `YFinanceSource`. `CryptoCompareSource` / `PolygonSource` deferred (current four cover the universe).
+- [x] `DataSource` protocol + `SourceRouter.plan(symbol, interval, start, end)` returning stitched `(source, slice)` tuples.
+- [x] Parquet writer with Hive partitioning: `data/parquet/ohlcv/symbol=<s>/interval=<i>/year=<y>/part-000.parquet`.
+- [x] DuckDB catalog: in-memory views over Parquet files + partition pruning (persistent catalog.db deferred — in-memory per-session is enough for query-time use).
+- [x] Outcome tape storage: `data/parquet/outcomes/market_id=<id>/year=<y>/part-000.parquet`.
+- [x] Backfill CLI: `python -m backend.tools.backfill --symbol BTC --interval 1h --from 2015-01-01`.
+- [x] Incremental updater: `DataUpdater` + `PeriodicScheduler` (backend/services/data_updater.py).
+- [x] Cross-validate mode: `SourceRouter.cross_validate()` compares close-price divergence between two sources.
+- [x] REST: `GET /candles`, `GET /catalog`, `POST /backfill`, `GET /outcomes/{id}/tape`. WS `/stream/backfill/{job_id}` and WS `/stream/candles` deferred to Phase 2 when the stream_hub service lands alongside the TradeEngine event stream.
+- [x] Dedupe key: `(symbol, interval, timestamp, source)` for OHLCV, `(timestamp, source, event_id)` for outcomes.
 
 **Depth targets** (see `OVERHAUL_PLAN.md` §6.1):
 

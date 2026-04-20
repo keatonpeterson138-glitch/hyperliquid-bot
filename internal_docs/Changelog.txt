@@ -82,4 +82,32 @@ Detailed commit-by-commit plans for the next two phases. Each plan traces files-
 
 Both plans flag risks (Hyperliquid SDK rate limits, yfinance instability, keyring-in-CI, thread races) with concrete mitigations, and call out open decisions. Total combined: 18 commits, ~5,000 LOC budget for the two phases.
 
+### Phase 1 complete — data platform end-to-end
+
+All 10 commits of Phase 1 landed. The Parquet lake is now the canonical storage for OHLCV + outcome tape; DuckDB queries it with partition pruning; four source adapters stitch deep history; a CLI backfills; an incremental updater tails new bars. REST API surfaces `/candles`, `/catalog`, `/backfill`, and `/outcomes/{id}/tape`.
+
+**P1.1** `HyperliquidSource` + `DataSource` Protocol + `CandleFrame` with canonical-column validation. httpx + mocktransport tests; exponential-backoff retry; HIP-3 dex:coin routing.
+
+**P1.2** `BinanceSource` (/api/v3/klines) + `CoinbaseSource` (/products/{prod}/candles). Known-earliest-date tables for BTC/ETH/SOL/LTC/BNB support router planning.
+
+**P1.3** `YFinanceSource` + `hip3_map.yfinance_ticker_for`. Lazy yfinance import so the service layer works without it. Full HIP-3 coverage (15 stocks + indices + commodities).
+
+**P1.4** `SourceRouter.plan()` walks sources in priority order, each fills the gap below the previous source's earliest_available. `cross_validate()` compares divergence between two named sources on overlap. `HyperliquidSource.earliest_available()` now returns Q4-2023 (native) / Oct-2025 (HIP-3) launch hints.
+
+**P1.5** `append_ohlcv` + `append_outcomes` with Hive partitioning, atomic writes via temp+rename, dedupe on (timestamp, source) with last-ingested wins. `latest_timestamp()` walks newest-year-first for fast tail-read. HIP-3 symbol ':' sanitized to '__' for path safety. pyarrow precision-alignment helper down-casts us→ms timestamps before schema cast.
+
+**P1.6** `DuckDBCatalog` + `query_candles()` / `query_outcomes()` / `list_catalog()`. In-memory connection per session, graceful empty-lake handling, symbol un-sanitization on read.
+
+**P1.7** `python -m backend.tools.backfill` CLI. argparse surface (symbol, interval, from/to, depth, data-root, source filter, allow-partial, testnet, verbose). Injectable router_factory + append_fn for tests.
+
+**P1.8** `DataUpdater` with first-run lookback + subsequent-tick gap-fill + callback. `PeriodicScheduler` (asyncio) wraps it for interval-driven ticks. Exception-tolerant — network glitches don't kill the loop.
+
+**P1.9** FastAPI `/candles` (range + source filter), `/catalog` (aggregated summary), `/backfill` (synchronous, 502 on source errors unless allow_partial). Pydantic models throughout. `Annotated[Dep, Depends(...)]` pattern to satisfy ruff B008.
+
+**P1.10** `OutcomeSource` adapter against the `core/outcome_client.OutcomeClient` protocol (injected fake for tests). `GET /outcomes/{market_id}/tape` over DuckDB. Sets up storage format; live WS subscribe lands in Phase 6 when the outcome workspace ships.
+
+Final state: 4 runtime source adapters + router + writer/reader + catalog + CLI + updater + 4 REST endpoints. ~2,800 LOC across `backend/` + `tests/unit/backend/`. `todo/path_to_v1.md` Phase 1 checkboxes all ticked; status 🟢.
+
+Next: Phase 2 (UniverseManager → app_db → KeyVault → AuditService → KillSwitch → TradeEngineService → slot APIs → ShadowClient). See `PHASE_2_BACKEND_ENGINE.md`.
+
 ---

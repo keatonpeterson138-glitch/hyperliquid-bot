@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from backend.api import candles, health
+from backend.api import candles, health, outcomes
 
 
 def create_app() -> FastAPI:
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(candles.router)
+    app.include_router(outcomes.router)
     return app
 
 
