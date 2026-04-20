@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Hyperliquid Bot",
         "width": 1440,
         "height": 900,

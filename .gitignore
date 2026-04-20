@@ -54,6 +54,12 @@ ENV/
 *.log
 logs/
 
+# Tauri + PyInstaller bundled sidecar binaries
+ui/src-tauri/binaries/*
+!ui/src-tauri/binaries/.gitkeep
+ui/src-tauri/target/
+*.spec~
+
 # OS
 .DS_Store
 Thumbs.db
