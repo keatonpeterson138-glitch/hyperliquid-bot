@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from backend.api import audit, candles, health, outcomes, universe, vault
+from backend.api import audit, candles, health, killswitch, outcomes, universe, vault
 
 
 def create_app() -> FastAPI:
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(universe.router)
     app.include_router(vault.router)
     app.include_router(audit.router)
+    app.include_router(killswitch.router)
     return app
 
 
