@@ -17,6 +17,7 @@ from typing import Any
 
 try:
     import keyring
+    import keyring.backend
     import keyring.errors
 except ImportError:  # pragma: no cover — optional, tests set a fake
     keyring = None  # type: ignore[assignment]
@@ -109,34 +110,43 @@ class KeyVault:
 # ── Module-level fake backend for tests ────────────────────────────────────
 
 
-class InMemoryKeyringBackend:
-    """``keyring`` Backend substitute that stores in-process only.
-
-    Install with ``keyring.set_keyring(InMemoryKeyringBackend())`` in
-    conftest / fixtures. Not threadsafe across processes — by design.
+def _make_in_memory_backend() -> Any:
+    """Build a ``KeyringBackend`` subclass at runtime (avoids importing the
+    base class unconditionally — tests still work if ``keyring`` is absent
+    by simply calling ``install_in_memory_backend`` *after* requirements
+    are installed).
     """
+    _require_keyring()
 
-    priority = 99  # higher than any real backend so test wins
+    class _InMem(keyring.backend.KeyringBackend):
+        priority = 99  # type: ignore[assignment]
 
-    def __init__(self) -> None:
-        self._store: dict[tuple[str, str], str] = {}
+        def __init__(self) -> None:
+            super().__init__()
+            self._store: dict[tuple[str, str], str] = {}
 
-    def set_password(self, servicename: str, username: str, password: str) -> None:
-        self._store[(servicename, username)] = password
+        def set_password(self, servicename: str, username: str, password: str) -> None:
+            self._store[(servicename, username)] = password
 
-    def get_password(self, servicename: str, username: str) -> str | None:
-        return self._store.get((servicename, username))
+        def get_password(self, servicename: str, username: str) -> str | None:
+            return self._store.get((servicename, username))
 
-    def delete_password(self, servicename: str, username: str) -> None:
-        if (servicename, username) not in self._store:
-            raise keyring.errors.PasswordDeleteError(f"not found: {username}")
-        del self._store[(servicename, username)]
+        def delete_password(self, servicename: str, username: str) -> None:
+            if (servicename, username) not in self._store:
+                raise keyring.errors.PasswordDeleteError(f"not found: {username}")
+            del self._store[(servicename, username)]
+
+    return _InMem()
 
 
-def install_in_memory_backend() -> InMemoryKeyringBackend:
+# Public alias retained for tests that already import the symbol.
+InMemoryKeyringBackend = _make_in_memory_backend
+
+
+def install_in_memory_backend() -> Any:
     """Install + return a fresh in-memory backend for tests/dev."""
     _require_keyring()
-    backend = InMemoryKeyringBackend()
+    backend = _make_in_memory_backend()
     keyring.set_keyring(backend)
     return backend
 
