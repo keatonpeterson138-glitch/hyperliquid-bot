@@ -28,6 +28,25 @@ markers = [
 line-length = 110
 target-version = "py312"
 
+# Legacy codebase — not yet audited or migrated. Each phase of the overhaul
+# refactors one area; when a file is touched, it comes out of this list and
+# starts getting lint-checked. New code (backend/, tests/, ui/) is checked.
+extend-exclude = [
+    "bot.py",
+    "dashboard.py",
+    "config.py",
+    "check_position.py",
+    "debug_balance.py",
+    "debug_unified.py",
+    "discover_markets.py",
+    "test_setup.py",
+    "test_trade.py",
+    "core/",
+    "strategies/",
+    "gui/",
+    "scripts/",
+]
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501"]  # line length handled by formatter

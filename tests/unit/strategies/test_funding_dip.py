@@ -5,7 +5,7 @@ are deterministic regardless of when the suite runs.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pandas as pd
@@ -23,7 +23,7 @@ def empty_df() -> pd.DataFrame:
 
 def _freeze_clock(hour: int, minute: int):
     """Patch datetime.now inside strategies.funding_dip to a fixed UTC moment."""
-    fake_now = datetime(2026, 4, 20, hour, minute, 0, tzinfo=timezone.utc)
+    fake_now = datetime(2026, 4, 20, hour, minute, 0, tzinfo=UTC)
 
     def _now(tz=None):
         return fake_now

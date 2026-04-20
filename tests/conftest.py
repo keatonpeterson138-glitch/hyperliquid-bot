@@ -7,8 +7,8 @@ stay deterministic and fast.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -30,7 +30,7 @@ def make_ohlcv(
     """
     n = len(close_prices)
     if start is None:
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
     times = [start + timedelta(minutes=step_minutes * i) for i in range(n)]
     closes = np.asarray(close_prices, dtype=float)
     opens = np.empty(n)
