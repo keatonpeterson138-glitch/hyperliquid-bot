@@ -106,9 +106,34 @@ def _merge_with_existing(
     return combined
 
 
+def _align_timestamp_columns(df: pd.DataFrame, schema: pa.Schema) -> pd.DataFrame:
+    """Down-cast any ms-typed schema timestamp columns on ``df`` to ms precision.
+
+    Without this, ``datetime.now(UTC)`` (microsecond precision) fed into a
+    ms-typed schema raises ArrowInvalid for values not divisible by 1000.
+    """
+    result = df
+    for field in schema:
+        if not pa.types.is_timestamp(field.type):
+            continue
+        if field.unit != "ms":
+            continue
+        if field.name not in result.columns:
+            continue
+        if result is df:
+            result = df.copy()
+        col = pd.to_datetime(result[field.name], utc=True)
+        result[field.name] = col.dt.floor("ms")
+    return result
+
+
 def _atomic_write(df: pd.DataFrame, destination: Path, schema: pa.Schema) -> None:
     """Write ``df`` to ``destination`` via a temp file in the same directory."""
     destination.parent.mkdir(parents=True, exist_ok=True)
+    # Align timestamp columns to ms precision before handing to pyarrow.
+    # pandas defaults to us or ns precision; passing that to a ms schema
+    # would raise ArrowInvalid when a us value isn't divisible by 1000.
+    df = _align_timestamp_columns(df, schema)
     # Cast each column to the schema type via pyarrow's schema-aware conversion.
     table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)
     tmp_path = destination.with_name(f"{destination.name}.tmp.{uuid.uuid4().hex}")

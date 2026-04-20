@@ -82,7 +82,7 @@ class TestHyperliquidSource:
         def responder(request: httpx.Request) -> httpx.Response:
             body = request.read()
             assert b'"candleSnapshot"' in body
-            assert b'"coin": "BTC"' in body
+            assert b'"coin":"BTC"' in body.replace(b" ", b"")
             return httpx.Response(200, json=candles)
 
         src = _build_source(responder)
@@ -100,21 +100,20 @@ class TestHyperliquidSource:
     def test_fetch_dedupes_identical_timestamps_across_pages(self) -> None:
         start = datetime(2024, 1, 1, tzinfo=UTC)
         end = datetime(2024, 1, 1, 5, tzinfo=UTC)
-        # Two calls return overlapping rows — duplicates must be dropped.
+        # Pagination continues until a response is empty. Set up two
+        # overlapping pages + empty terminator — duplicates must be dropped.
         first_page = [_fake_candle(_to_utc_ms(start) + 60_000 * 60 * i, 100 + i) for i in range(3)]
-        second_page = [_fake_candle(_to_utc_ms(start) + 60_000 * 60 * i, 100 + i) for i in range(2, 4)]
+        second_page = [_fake_candle(_to_utc_ms(start) + 60_000 * 60 * i, 200 + i) for i in range(2, 4)]
         responses = iter([first_page, second_page, []])
 
         def responder(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json=next(responses))
+            return httpx.Response(200, json=next(responses, []))
 
         src = _build_source(responder)
-        # Force pagination by requesting a long range; but MAX_BARS_PER_CALL
-        # is 4000 — for a ~5h range one chunk suffices. So we just validate
-        # dedupe works when called with the assembled collected list.
         frame = src.fetch_candles("BTC", "1h", start, end)
-        # With only one call needed, dedupe should still leave 3 unique rows.
-        assert len(frame.bars) == 3
+        # 3 + 2 overlapping rows → 4 unique timestamps after dedupe.
+        assert len(frame.bars) == 4
+        assert frame.bars["timestamp"].is_monotonic_increasing
 
     def test_fetch_routes_hip3_dex_symbol(self) -> None:
         captured: list[bytes] = []
@@ -132,9 +131,9 @@ class TestHyperliquidSource:
         )
 
         assert len(captured) >= 1
-        body = captured[0]
-        assert b'"coin": "TSLA"' in body
-        assert b'"dex": "xyz"' in body
+        body = captured[0].replace(b" ", b"")
+        assert b'"coin":"TSLA"' in body
+        assert b'"dex":"xyz"' in body
         assert frame.symbol == "xyz:TSLA"
 
     def test_retry_on_http_error_then_success(self) -> None:
