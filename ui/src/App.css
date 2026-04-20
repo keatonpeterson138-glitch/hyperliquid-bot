@@ -322,6 +322,30 @@ select, input {
   flex-wrap: wrap;
 }
 
+/* ── Live ticker bar ─────────────────────────────────────────────── */
+
+.ticker-card { padding: 10px 16px; }
+.ticker-bar {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.ticker-bar--stale { opacity: 0.55; }
+.ticker { display: flex; flex-direction: column; min-width: 80px; }
+.ticker__sym {
+  font-size: 10px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ticker__price {
+  font-size: 17px;
+  font-weight: 600;
+  transition: color 0.3s;
+}
+
 /* ── Titlebar menu bar ───────────────────────────────────────────── */
 
 .titlebar__left { display: flex; gap: 12px; align-items: center; }

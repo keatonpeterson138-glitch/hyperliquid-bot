@@ -29,6 +29,7 @@ from backend.api import (
 )
 from backend.api import killswitch as killswitch_api
 from backend.api import logs as logs_api
+from backend.api import markets as markets_api
 from backend.api import markups as markups_api
 from backend.api import models as models_api
 from backend.api import notes as notes_api
@@ -118,6 +119,15 @@ def _wire_services(app: FastAPI) -> None:
     backtest_engine = BacktestEngine(candle_query=_candle_query)
     backtest_registry = backtest_api.BacktestRegistry()
 
+    # Backfill service — powers /backfill, /candles auto-fetch, /candles/refresh.
+    # Lazy import so packaging tests don't pull network deps at import time.
+    try:
+        backfill_service = candles.build_default_backfill_service()
+        candles.install_backfill_service(backfill_service)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("backfill service unavailable: %s", exc)
+        backfill_service = None
+
     from backend.services.analog import AnalogEngine
     analog_engine = AnalogEngine(candle_query=_candle_query)
 
@@ -129,6 +139,13 @@ def _wire_services(app: FastAPI) -> None:
 
     from backend.services.notes_store import NotesStore
     notes_store = NotesStore(db)
+
+    # Live market data — polls Hyperliquid's info endpoint every ~3s
+    # in a background thread. Testnet toggle lives in Settings.
+    from backend.services.live_market import LiveMarketService
+    live_market = LiveMarketService(testnet=settings_store.all().testnet)
+    live_market.start_background_poll()
+    app.state.live_market = live_market
 
     order_repo = OrderRepository(db)
     # Gateway stays None in dev until the vault is unlocked and a real
@@ -162,6 +179,9 @@ def _wire_services(app: FastAPI) -> None:
     app.dependency_overrides[orders_api.get_markup_store_for_orders] = lambda: markup_store
     app.dependency_overrides[backtest_api.get_backtest_engine] = lambda: backtest_engine
     app.dependency_overrides[backtest_api.get_backtest_registry] = lambda: backtest_registry
+    if backfill_service is not None:
+        app.dependency_overrides[candles.get_backfill_service] = lambda: backfill_service
+    app.dependency_overrides[markets_api.get_live_market] = lambda: live_market
     app.dependency_overrides[analog_api.get_analog_engine] = lambda: analog_engine
     app.dependency_overrides[models_api.get_model_registry] = lambda: model_registry
     app.dependency_overrides[settings_api.get_settings_store] = lambda: settings_store
@@ -227,6 +247,7 @@ def create_app() -> FastAPI:
     app.include_router(notes_api.router)
     app.include_router(wallet_api.router)
     app.include_router(logs_api.router)
+    app.include_router(markets_api.router)
     app.include_router(stream_api.router)
     return app
 

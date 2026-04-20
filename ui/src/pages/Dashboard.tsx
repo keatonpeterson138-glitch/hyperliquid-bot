@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { TickerBar } from "../components/TickerBar";
 import { health, slots as slotsApi } from "../api/endpoints";
 import { useStream } from "../hooks/useStream";
 import type { HealthResponse, Slot, StreamEvent } from "../api/types";
@@ -23,6 +24,10 @@ export function Dashboard() {
   return (
     <div className="page">
       <h1 className="page__title">Dashboard</h1>
+
+      <section className="card ticker-card">
+        <TickerBar symbols={["BTC", "ETH", "SOL", "HYPE", "AVAX", "ARB"]} />
+      </section>
 
       <section className="card">
         <h2 className="card__title">Backend</h2>

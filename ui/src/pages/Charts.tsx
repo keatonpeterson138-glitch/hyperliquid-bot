@@ -38,23 +38,47 @@ export function ChartsPage() {
   useEffect(() => {
     let cancelled = false;
     const lookbackDays = DEFAULT_LOOKBACK_DAYS[interval];
-    const to = new Date();
-    const from = new Date(to.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 
-    setLoading(true);
-    setError(null);
-    candles
-      .get(symbol, interval, from.toISOString(), to.toISOString())
-      .then((r) => {
+    const loadFull = async () => {
+      const to = new Date();
+      const from = new Date(to.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+      setLoading(true);
+      setError(null);
+      try {
+        const r = await candles.get(symbol, interval, from.toISOString(), to.toISOString());
         if (!cancelled) setData(r);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (!cancelled) setError((e as Error).message);
-      })
-      .finally(() => !cancelled && setLoading(false));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    // Lightweight tail refresh — only pulls the last ~48h and merges.
+    const refreshTail = async () => {
+      try {
+        const r = await candles.refresh(symbol, interval, 48);
+        if (cancelled) return;
+        setData((prev) => {
+          if (!prev) return r;
+          const mergedMap = new Map(prev.bars.map((b) => [b.timestamp, b]));
+          for (const b of r.bars) mergedMap.set(b.timestamp, b);
+          const bars = [...mergedMap.values()].sort((a, b) =>
+            a.timestamp < b.timestamp ? -1 : 1,
+          );
+          return { ...prev, bars, bar_count: bars.length };
+        });
+      } catch {
+        /* transient — next tick will try again */
+      }
+    };
+
+    void loadFull();
+    const id = window.setInterval(refreshTail, 30_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
   }, [symbol, interval]);
 

@@ -80,6 +80,10 @@ export const candles = {
     if (source) q.set("source", source);
     return api.get<CandlesResponse>(`/candles?${q.toString()}`);
   },
+  refresh: (symbol: string, interval: string, hours = 48) => {
+    const q = new URLSearchParams({ symbol, interval, hours: String(hours) });
+    return api.post<CandlesResponse>(`/candles/refresh?${q.toString()}`);
+  },
   catalog: () => api.get<CatalogResponse>("/catalog"),
 };
 
@@ -142,6 +146,26 @@ export const orders = {
   cancel: (id: string) => api.del<Order>(`/orders/${id}`),
   fromMarkup: (body: { markup_id: string; size_usd: number; leverage?: number | null; slot_id?: string | null }) =>
     api.post<Order>("/orders/from-markup", body),
+};
+
+export interface Ticker {
+  symbol: string;
+  price: number | null;
+  as_of: string;
+}
+
+export const markets = {
+  tickers: (symbols: string[] = ["BTC", "ETH", "SOL", "HYPE"]) =>
+    api.get<{ tickers: Ticker[] }>(
+      `/markets/ticker?symbols=${encodeURIComponent(symbols.join(","))}`,
+    ),
+  allMids: () => api.get<Record<string, number>>("/markets/mids"),
+  meta: () => api.get<{ raw: Record<string, unknown> }>("/markets/meta"),
+  funding: (symbol: string, lookback_hours = 24) =>
+    api.get<{
+      symbol: string;
+      rows: Array<{ coin: string; funding_rate: number; premium: number | null; timestamp: string }>;
+    }>(`/markets/funding?symbol=${encodeURIComponent(symbol)}&lookback_hours=${lookback_hours}`),
 };
 
 export const outcomes = {
