@@ -10,10 +10,19 @@ This is what most users want.
 
 ### Step 1 · Download
 
-1. Go to the project's **[Releases page](../../releases)**.
-2. Download the latest `Hyperliquid Bot_<version>_x64_en-US.msi` file (~143 MB).
+**Direct link:**
+**[HyperliquidBot-0.2.0-Setup.msi](https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases/latest/download/HyperliquidBot-0.2.0-Setup.msi)** (143 MB)
 
-> **Note on releases:** the MSI is too large to ship inside the git tree (143 MB), so it lives on GitHub Releases instead. Each tagged version of the project gets a release with the MSI attached. If no Releases exist yet, build it yourself with Option B below.
+Or:
+1. Go to the project's **[Releases page](https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases)**.
+2. Click the latest release (top of the page).
+3. Under **Assets**, download `HyperliquidBot-0.2.0-Setup.msi`.
+
+> **Note on releases:** the MSI is too large to ship inside the git tree
+> (143 MB > GitHub's 100 MB single-file limit), so it lives on GitHub
+> Releases instead. Each tagged version of the project gets a release
+> with both the `.msi` and an alternative `.exe` (NSIS setup) attached.
+> SHA-256 checksums are in the release notes for verification.
 
 ### Step 2 · Run the installer
 

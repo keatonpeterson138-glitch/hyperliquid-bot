@@ -322,3 +322,25 @@ a one-shot mount-time health check.
   packed-objects are read-only on the Windows mirror after gc, which made
   rsync fail with EACCES on rerun and aborted the build before it ran.
 
+
+## 2026-04-20 (release) — v0.2.0 published as GitHub Release
+
+### Summary
+First public Windows installer published to GitHub Releases. README + install
+guide now lead with the direct download link so end users (e.g., your brother)
+can install with one click and zero git knowledge.
+
+### Release
+- Tag: `v0.2.0`
+- URL: https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases/tag/v0.2.0
+- Direct MSI: https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases/latest/download/HyperliquidBot-0.2.0-Setup.msi
+- Assets:
+    * `HyperliquidBot-0.2.0-Setup.msi` (143 MB, sha256 4b8fdc6e15…dae482c)
+    * `HyperliquidBot-0.2.0-Setup.exe` (142 MB NSIS, sha256 528227fdfb…ae482c)
+
+### Docs
+- README.md — top-of-fold direct download link to the MSI + Releases page.
+- docs/install.md — Step 1 now shows the explicit direct link, retains the
+  "browse Releases" path as a fallback.
+- internal_docs/Changelog.txt — this entry.
+

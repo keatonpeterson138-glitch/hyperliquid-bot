@@ -8,18 +8,22 @@ Desktop trading app for [Hyperliquid](https://hyperliquid.xyz/) — perps, HIP-3
 
 ## Download & install
 
-### Windows (built MSI)
+### Windows — one-click installer
 
-The pre-built installer is published as a GitHub Release.
+> **➡ Download: [HyperliquidBot-0.2.0-Setup.msi](https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases/latest/download/HyperliquidBot-0.2.0-Setup.msi) (143 MB)**
+>
+> Or browse all versions on the **[Releases page](https://github.com/keatonpeterson138-glitch/hyperliquid-bot/releases)**.
 
-1. Go to **[Releases](../../releases)** in this repo.
-2. Download the latest `Hyperliquid Bot_<version>_x64_en-US.msi` (~143 MB).
-3. Double-click. Windows SmartScreen will warn "publisher unknown" — click **More info → Run anyway** (the binary is unsigned because we don't pay for a code-signing cert yet; build it yourself if you don't trust the upload).
+1. Click the link above to download the `.msi`.
+2. Double-click the downloaded file.
+3. Windows SmartScreen will warn "publisher unknown" — click **More info → Run anyway** (the installer isn't code-signed; that's a $100/year cert nobody bothers with on a personal project — see "Build from source" below if you don't trust the upload).
 4. Follow the install wizard. Defaults are fine.
-5. Launch from Start menu → "Hyperliquid Bot".
+5. Launch "Hyperliquid Bot" from your Start menu.
 6. First launch takes ~15 seconds while the bundled Python runtime extracts. After that, instant.
 
 **That's it** — the app handles everything else (auto-creates the data folder, seeds preloaded API keys, loads the macro chart history in the background).
+
+If MSI doesn't work for you, an NSIS `setup.exe` is attached to the same release as a fallback.
 
 ### Build from source (Linux / macOS / Windows)
 
