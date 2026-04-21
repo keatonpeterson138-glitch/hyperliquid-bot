@@ -1,19 +1,38 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { slots as slotsApi } from "../api/endpoints";
+import { slots as slotsApi, type PresetSlot } from "../api/endpoints";
 import type { Slot } from "../api/types";
 
 export function SlotsPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [presets, setPresets] = useState<PresetSlot[]>([]);
+  const [presetBusy, setPresetBusy] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  const refresh = () => slotsApi.list().then(setSlots).catch(() => undefined);
+  const refresh = useCallback(
+    () => slotsApi.list().then(setSlots).catch(() => undefined),
+    [],
+  );
 
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 5_000);
     return () => clearInterval(id);
+  }, [refresh]);
+
+  useEffect(() => {
+    slotsApi.presets().then(setPresets).catch(() => undefined);
   }, []);
+
+  const addFromPreset = async (presetId: string) => {
+    setPresetBusy(presetId);
+    try {
+      await slotsApi.instantiatePreset(presetId);
+      await refresh();
+    } finally {
+      setPresetBusy(null);
+    }
+  };
 
   const handleStart = async (id: string) => {
     await slotsApi.start(id);
@@ -61,6 +80,39 @@ export function SlotsPage() {
           }}
         />
       ) : null}
+
+      {presets.length > 0 && (
+        <section className="card">
+          <h2 className="card__title">Backtested presets ({presets.length})</h2>
+          <p className="muted small">
+            Click "Add" to create a disabled slot from this preset. Numbers come
+            from <code>scripts/run_preset_bench.py</code> — see <code>internal_docs/trading_presets.md</code>.
+          </p>
+          <div className="preset-grid">
+            {presets.map((p) => (
+              <div key={p.preset_id} className="preset-card">
+                <div className="preset-card__head">
+                  <strong>{p.name}</strong>
+                  <span className="badge badge--ok">{(p.win_rate * 100).toFixed(1)}% WR</span>
+                </div>
+                <div className="preset-card__metrics">
+                  <span>Sharpe <b>{p.sharpe.toFixed(2)}</b></span>
+                  <span>Return <b>{p.total_return_pct.toFixed(2)}%</b></span>
+                  <span>{p.trade_count} trades</span>
+                  <span>{p.backtest_window_years}y window</span>
+                </div>
+                <p className="preset-card__desc muted small">{p.description}</p>
+                <button
+                  onClick={() => addFromPreset(p.preset_id)}
+                  disabled={presetBusy === p.preset_id}
+                >
+                  {presetBusy === p.preset_id ? "Adding…" : "+ Add slot"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {slots.map((s) => (
         <section key={s.id} className="card slot-card">

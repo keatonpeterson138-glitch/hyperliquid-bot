@@ -1,8 +1,9 @@
 // Charts workspace — tiled grid of independent ChartTiles (1/2/4/8).
-// Each tile has its own symbol + interval + live WS + deep backfill.
-// Catalog dropdown lists all Hyperliquid perps (pulled from /markets/meta).
+// Each tile has its own symbol, interval, chart type, indicator set,
+// overlay symbols, live WS, and deep backfill. Persists to localStorage
+// via the workspace helpers so reloading the tab restores the setup.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChartTile } from "../components/ChartTile";
 import {
@@ -10,25 +11,82 @@ import {
   settings as settingsApi,
   universe,
 } from "../api/endpoints";
-
-type Layout = 1 | 2 | 4 | 8;
+import {
+  defaultTile,
+  loadWorkspace,
+  saveWorkspace,
+  type ChartType,
+  type IndicatorState,
+  type Layout,
+  type TileState,
+} from "../lib/workspaceStorage";
 
 const DEFAULT_SYMBOLS = ["BTC", "ETH", "SOL", "HYPE", "AVAX", "ARB", "DOGE", "LINK"];
 const DEFAULT_INTERVAL = "1h";
 
-interface Tile {
-  symbol: string;
-  interval: string;
-}
+// Non-crypto chartables — stitched into the symbol catalog alongside
+// Hyperliquid's perp universe so the dropdown covers every data source
+// the backend router can stitch (stocks via yfinance/Alpha Vantage,
+// macro series via FRED, Hyperliquid HIP-3 stocks/commodities, etc.).
+const STOCK_SYMBOLS = [
+  "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "AMD",
+  "INTC", "NFLX", "COIN", "MSTR", "HOOD", "PLTR", "TSM",
+];
+const HIP3_PERPS = [
+  "xyz:SP500", "xyz:XYZ100",
+  "cash:GOLD", "cash:SILVER", "cash:OIL", "cash:CORN", "cash:WHEAT",
+];
+const INDEX_SYMBOLS = ["^GSPC", "^DJI", "^IXIC", "^VIX", "^TNX"];
+const FRED_SERIES = [
+  "DFF",    "DGS10",   "DGS2",    "T10Y2Y",  "DFII10",
+  "T10YIE", "T5YIFR",  "CPIAUCSL","CPILFESL","UNRATE",
+  "PAYEMS", "ICSA",    "GDPC1",   "INDPRO",  "UMCSENT",
+  "VIXCLS", "DTWEXBGS","WALCL",   "M2SL",    "RRPONTSYD",
+];
+const NON_CRYPTO_SYMBOLS = [
+  ...STOCK_SYMBOLS,
+  ...HIP3_PERPS,
+  ...INDEX_SYMBOLS,
+  ...FRED_SERIES,
+];
 
 export function ChartsPage() {
-  const [layout, setLayout] = useState<Layout>(1);
-  const [tiles, setTiles] = useState<Tile[]>([{ symbol: "BTC", interval: DEFAULT_INTERVAL }]);
+  const initialRef = useRef(loadWorkspace());
+
+  const [layout, setLayout] = useState<Layout>(
+    initialRef.current?.layout ?? 1,
+  );
+  const [tiles, setTiles] = useState<TileState[]>(
+    initialRef.current?.tiles?.length
+      ? initialRef.current.tiles
+      : [defaultTile("BTC", DEFAULT_INTERVAL)],
+  );
   const [symbolCatalog, setSymbolCatalog] = useState<string[]>(DEFAULT_SYMBOLS);
   const [testnet, setTestnet] = useState(false);
 
-  // Symbol catalog — prefer live Hyperliquid meta (always populated).
+  // Persist on every layout/tiles change. Guard the first render so we
+  // don't overwrite with the pre-load state before the restore finishes.
+  const hasLoaded = useRef(false);
   useEffect(() => {
+    if (!hasLoaded.current) {
+      hasLoaded.current = true;
+      return;
+    }
+    saveWorkspace({ version: 1, layout, tiles });
+  }, [layout, tiles]);
+
+  useEffect(() => {
+    const merge = (cryptoNames: string[]) => {
+      // De-dupe while preserving order — crypto first (most frequent use),
+      // then stocks / HIP-3 / indices / FRED macro so everything's one click.
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const s of [...cryptoNames, ...NON_CRYPTO_SYMBOLS]) {
+        if (!seen.has(s)) { seen.add(s); out.push(s); }
+      }
+      setSymbolCatalog(out);
+    };
+
     marketsApi
       .meta()
       .then((r) => {
@@ -36,59 +94,67 @@ export function ChartsPage() {
         const names = (raw.universe ?? [])
           .map((u) => u.name)
           .filter((n): n is string => !!n);
-        if (names.length > 0) setSymbolCatalog(names);
+        if (names.length > 0) merge(names);
         else return universe.list({ active_only: true, kind: "perp" }).then((u) => {
-          const fallback = u.markets.map((m) => m.symbol);
-          if (fallback.length > 0) setSymbolCatalog(fallback);
+          merge(u.markets.map((m) => m.symbol));
         });
       })
       .catch(() =>
         universe
           .list({ active_only: true, kind: "perp" })
-          .then((u) => {
-            const fallback = u.markets.map((m) => m.symbol);
-            if (fallback.length > 0) setSymbolCatalog(fallback);
-          })
-          .catch(() => undefined),
+          .then((u) => merge(u.markets.map((m) => m.symbol)))
+          .catch(() => merge(DEFAULT_SYMBOLS)),
       );
     settingsApi.get().then((s) => setTestnet(s.testnet)).catch(() => undefined);
   }, []);
 
-  // Grow or trim tile list when layout changes.
   const changeLayout = (next: Layout) => {
     setLayout(next);
     setTiles((prev) => {
       if (prev.length === next) return prev;
       if (prev.length > next) return prev.slice(0, next);
-      const extra: Tile[] = [];
+      const extra: TileState[] = [];
       const defaults = DEFAULT_SYMBOLS;
       for (let i = prev.length; i < next; i++) {
-        extra.push({
-          symbol: defaults[i % defaults.length],
-          interval: DEFAULT_INTERVAL,
-        });
+        extra.push(defaultTile(defaults[i % defaults.length], DEFAULT_INTERVAL));
       }
       return [...prev, ...extra];
     });
   };
 
   const tileHeight = useMemo(() => {
-    // Rough per-tile height — two rows when layout >= 4.
     if (layout === 1) return 560;
     if (layout === 2) return 480;
     if (layout === 4) return 320;
-    return 260; // 8 tiles, 4x2 grid
+    return 260;
   }, [layout]);
 
-  const setTile = (idx: number, patch: Partial<Tile>) =>
+  const setTile = (idx: number, patch: Partial<TileState>) =>
     setTiles((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+
+  const setTileIndicators = (idx: number, patch: Partial<IndicatorState>) =>
+    setTiles((prev) => prev.map((t, i) =>
+      i === idx ? { ...t, indicators: { ...t.indicators, ...patch } } : t,
+    ));
+
+  const setTileChartType = (idx: number, chartType: ChartType) =>
+    setTiles((prev) => prev.map((t, i) => (i === idx ? { ...t, chartType } : t)));
+
+  const setTileOverlays = (idx: number, overlays: string[]) =>
+    setTiles((prev) => prev.map((t, i) => (i === idx ? { ...t, overlays } : t)));
 
   const removeTile = (idx: number) =>
     setTiles((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       setLayout(Math.max(1, next.length) as Layout);
-      return next.length === 0 ? [{ symbol: "BTC", interval: DEFAULT_INTERVAL }] : next;
+      return next.length === 0 ? [defaultTile("BTC", DEFAULT_INTERVAL)] : next;
     });
+
+  const resetWorkspace = () => {
+    if (!confirm("Reset the chart workspace? This clears every tile + indicator + overlay.")) return;
+    setLayout(1);
+    setTiles([defaultTile("BTC", DEFAULT_INTERVAL)]);
+  };
 
   return (
     <div className="page">
@@ -107,8 +173,9 @@ export function ChartsPage() {
             <option value={8}>8 charts (4×2 grid)</option>
           </select>
         </label>
+        <button onClick={resetWorkspace} className="btn btn--subtle">Reset workspace</button>
         <span className="muted small">
-          {symbolCatalog.length} symbols · back-pull deep history on first open · Hyperliquid WS live
+          {symbolCatalog.length} symbols · deep back-pull · Hyperliquid WS live · persists per tab
         </span>
       </div>
 
@@ -118,12 +185,18 @@ export function ChartsPage() {
             key={i}
             symbol={t.symbol}
             interval={t.interval}
+            chartType={t.chartType}
+            indicators={t.indicators}
+            overlays={t.overlays}
             testnet={testnet}
             height={tileHeight}
             symbolOptions={symbolCatalog}
             showMarkups={layout === 1}
             onSymbolChange={(s) => setTile(i, { symbol: s })}
             onIntervalChange={(iv) => setTile(i, { interval: iv })}
+            onChartTypeChange={(ct) => setTileChartType(i, ct)}
+            onIndicatorsChange={(patch) => setTileIndicators(i, patch)}
+            onOverlaysChange={(ov) => setTileOverlays(i, ov)}
             onRemove={tiles.length > 1 ? () => removeTile(i) : undefined}
           />
         ))}

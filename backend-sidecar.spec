@@ -52,11 +52,21 @@ hiddenimports = [
     "sklearn.preprocessing",
     "sklearn.metrics",
     "joblib",
+    # Stock + commodity data source.
+    *collect_submodules("yfinance"),
+    "lxml", "html5lib",          # yfinance's HTML fallback parsers
+    "multitasking", "frozendict", "peewee",  # small runtime deps yfinance imports dynamically
 ]
 
 added_files = [
     (str(PROJECT / "backend" / "db" / "migrations"), "backend/db/migrations"),
 ]
+# Credential seed — baked in so a fresh install already has FRED / Alpha
+# Vantage / etc. keys. Gitignored; user can overwrite with
+# `backend/config/credentials_seed.example.json` as a starting template.
+_seed = PROJECT / "backend" / "config" / "credentials_seed.json"
+if _seed.is_file():
+    added_files.append((str(_seed), "backend/config"))
 for pkg in ("fastapi", "pydantic", "pydantic_core", "duckdb"):
     try:
         added_files.extend(collect_data_files(pkg))
@@ -75,7 +85,9 @@ a = Analysis(
     excludes=[
         "matplotlib",
         "tkinter",
-        "yfinance",
+        # yfinance removed from excludes — stock/commodity charts (TSLA,
+        # GC=F/GOLD, SI=F/SILVER, ...) route through YFinanceSource, which
+        # can't load if yfinance isn't in the bundle.
         "xgboost",
         "scipy.io.matlab",
     ],

@@ -8,11 +8,33 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_MIGRATIONS_DIR = Path(__file__).parent
+
+def _resolve_migrations_dir() -> Path:
+    """Locate the SQL migration files.
+
+    In dev, ``__file__`` is a real path next to the .sql files. In a
+    PyInstaller one-file bundle, the .sql files are extracted to
+    ``_MEIPASS/backend/db/migrations/`` (via the spec's ``added_files``)
+    and may live separately from the bundled bytecode, so we try that
+    path too.
+    """
+    dev_path = Path(__file__).parent
+    if any(dev_path.glob("*.sql")):
+        return dev_path
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        frozen = Path(meipass) / "backend" / "db" / "migrations"
+        if any(frozen.glob("*.sql")):
+            return frozen
+    return dev_path  # fall back so the caller gets a clear "no migrations" error
+
+
+_MIGRATIONS_DIR = _resolve_migrations_dir()
 
 
 def _ensure_version_table(conn: sqlite3.Connection) -> None:

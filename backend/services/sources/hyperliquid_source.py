@@ -44,6 +44,22 @@ _INTERVAL_MS: dict[str, int] = {
 _HL_LAUNCH: datetime = datetime(2023, 11, 1, tzinfo=UTC)
 _HIP3_LAUNCH: datetime = datetime(2025, 10, 13, tzinfo=UTC)
 
+# Tickers that yfinance/AlphaVantage/FRED handle, NOT Hyperliquid.
+# Without this filter the router would route every stock/index/macro symbol
+# to Hyperliquid first, get nothing back, and never fall through.
+_NON_HYPERLIQUID_SYMBOLS: frozenset[str] = frozenset({
+    # US equities
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+    "NFLX", "INTC", "AMD", "TSM", "COIN", "MSTR", "HOOD", "PLTR",
+    # ETFs / index proxies
+    "SPY", "QQQ", "IWM", "DIA", "VOO", "VTI", "GLD", "SLV", "USO",
+    # FRED macro codes (subset of POPULAR_SERIES)
+    "DFF", "DGS10", "DGS2", "T10Y2Y", "DFII10", "T10YIE", "T5YIFR",
+    "CPIAUCSL", "CPILFESL", "UNRATE", "PAYEMS", "ICSA", "GDPC1",
+    "INDPRO", "UMCSENT", "VIXCLS", "DTWEXBGS", "WALCL", "M2SL",
+    "RRPONTSYD",
+})
+
 
 class HyperliquidSource:
     """Primary source for native + HIP-3 perps.
@@ -83,7 +99,24 @@ class HyperliquidSource:
     # ── DataSource protocol ────────────────────────────────────────────────
 
     def supports(self, symbol: str, interval: str) -> bool:
-        return interval in _INTERVAL_MS and bool(symbol)
+        if interval not in _INTERVAL_MS or not symbol:
+            return False
+        # Reject obvious non-Hyperliquid tickers so the router falls
+        # through to yfinance/alphavantage/FRED instead of wasting a call:
+        #   * equity/futures-style: SPY, TSLA, GC=F, CL=F, AAPL ...
+        #   * indices: ^GSPC, ^VIX, ^TNX
+        #   * FRED series: uppercase 4+ letters that look like macro codes
+        # HIP-3 perps still match because they carry the `:` namespace
+        # prefix (xyz:TSLA, cash:GOLD).
+        if "=" in symbol or symbol.startswith("^"):
+            return False
+        if ":" in symbol:
+            return True   # HIP-3 — Hyperliquid handles these natively
+        # Bare ticker: keep only if it's plausibly a crypto. Crypto tickers
+        # are typically 2-6 uppercase chars with no digits-only patterns
+        # (BTC, ETH, SOL, HYPE, AVAX, ARB, etc.). Reject the well-known
+        # equity tickers so the router routes them to yfinance.
+        return symbol not in _NON_HYPERLIQUID_SYMBOLS
 
     def earliest_available(self, symbol: str, interval: str) -> datetime | None:
         # Rough estimate — used by SourceRouter to decide where fallback

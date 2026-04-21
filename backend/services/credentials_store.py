@@ -27,6 +27,9 @@ VALID_PROVIDERS = {
     "telegram",
     "email",
     "rss",
+    "fred",
+    "plaid",
+    "etrade",
     "other",
 }
 
@@ -157,6 +160,82 @@ class CredentialsStore:
         backend services that only need 'the' key for that provider."""
         rows = self.list(provider=provider)
         return rows[0] if rows else None
+
+    def export_profile(self) -> dict[str, Any]:
+        """Dump every credential with raw values. Used by the Settings
+        "Export API keys" button — a local-save-only disaster-recovery path
+        so the user can rehydrate after reinstalling."""
+        rows = self.list()
+        return {
+            "version": 1,
+            "exported_at": datetime.now(UTC).isoformat(),
+            "credentials": [
+                {
+                    "provider": c.provider,
+                    "label": c.label,
+                    "api_key": c.api_key,
+                    "api_secret": c.api_secret,
+                    "metadata": c.metadata,
+                }
+                for c in rows
+            ],
+        }
+
+    def import_profile(self, payload: dict[str, Any], *, replace: bool = False) -> dict[str, int]:
+        """Restore credentials from an earlier ``export_profile`` blob.
+
+        When ``replace`` is true, every existing credential is deleted
+        first so the import is an exact clone. Otherwise, entries merge by
+        (provider, label) — an existing row with matching provider+label is
+        updated in-place, the rest are inserted.
+        """
+        if not isinstance(payload, dict):
+            raise ValueError("import payload must be a JSON object")
+        creds = payload.get("credentials")
+        if not isinstance(creds, list):
+            raise ValueError("import payload missing 'credentials' list")
+
+        created = 0
+        updated = 0
+        skipped = 0
+
+        if replace:
+            for c in self.list():
+                self.delete(c.id)
+
+        existing_by_key: dict[tuple[str, str | None], Credential] = {}
+        if not replace:
+            for c in self.list():
+                existing_by_key[(c.provider, c.label)] = c
+
+        for entry in creds:
+            if not isinstance(entry, dict):
+                skipped += 1
+                continue
+            provider = entry.get("provider")
+            if provider not in VALID_PROVIDERS:
+                skipped += 1
+                continue
+            label = entry.get("label")
+            api_key = entry.get("api_key")
+            api_secret = entry.get("api_secret")
+            metadata = entry.get("metadata") or {}
+            key = (provider, label)
+            existing = existing_by_key.get(key)
+            if existing is not None:
+                self.update(
+                    existing.id,
+                    label=label, api_key=api_key, api_secret=api_secret,
+                    metadata=metadata,
+                )
+                updated += 1
+            else:
+                self.create(
+                    provider=provider, label=label,
+                    api_key=api_key, api_secret=api_secret, metadata=metadata,
+                )
+                created += 1
+        return {"created": created, "updated": updated, "skipped": skipped}
 
 
 def _row_to_cred(row: Any) -> Credential:

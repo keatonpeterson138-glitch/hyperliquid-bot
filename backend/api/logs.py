@@ -77,7 +77,14 @@ def configure_file_logging(path: Path | str | None = None) -> Path:
     """
     from logging.handlers import RotatingFileHandler
 
-    log_path = Path(path) if path is not None else Path("data") / "logs" / "backend.log"
+    if path is not None:
+        log_path = Path(path)
+    else:
+        # Anchor to the resolved data root (``%LOCALAPPDATA%\hyperliquid-bot``
+        # on Windows) — falling back to relative ``data/`` blows up in
+        # Program Files installs where that path isn't writable.
+        from backend.db.paths import DEFAULT_DATA_ROOT
+        log_path = DEFAULT_DATA_ROOT / "logs" / "backend.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(log_path, maxBytes=5_000_000, backupCount=3, encoding="utf-8")
     handler.setFormatter(logging.Formatter(

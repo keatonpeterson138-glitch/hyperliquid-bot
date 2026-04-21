@@ -32,8 +32,12 @@ from backend.db.parquet_writer import append_ohlcv
 from backend.db.paths import DEFAULT_DATA_ROOT
 from backend.services.source_router import SourceRouter, SourceSlice
 from backend.services.sources.base import CandleFrame
+from backend.services.sources.alphavantage_source import AlphaVantageSource
 from backend.services.sources.binance_source import BinanceSource
 from backend.services.sources.coinbase_source import CoinbaseSource
+from backend.services.sources.coingecko_source import CoinGeckoSource
+from backend.services.sources.cryptocompare_source import CryptoCompareSource
+from backend.services.sources.fred_source import FREDSource
 from backend.services.sources.hyperliquid_source import HyperliquidSource
 from backend.services.sources.yfinance_source import YFinanceSource
 
@@ -53,17 +57,30 @@ class BackfillArgs:
     testnet: bool
 
 
-def build_default_router(*, testnet: bool = False) -> SourceRouter:
-    """Standard router: Hyperliquid primary + Binance / Coinbase / yfinance fallbacks."""
+def build_default_router(
+    *,
+    testnet: bool = False,
+    credentials: "Any | None" = None,
+) -> SourceRouter:
+    """Standard router: Hyperliquid primary + Binance / Coinbase / yfinance
+    + the new keyed/key-optional sources (CryptoCompare, CoinGecko, FRED,
+    Alpha Vantage) when a ``CredentialsStore`` is passed. Sources missing
+    credentials gracefully fall through at plan time via their ``supports``
+    / ``fetch_candles`` checks."""
     shared_http = httpx.Client(timeout=10.0)
-    return SourceRouter(
-        [
-            HyperliquidSource(testnet=testnet, http_client=shared_http),
-            BinanceSource(http_client=shared_http),
-            CoinbaseSource(http_client=shared_http),
-            YFinanceSource(),
-        ]
-    )
+    sources = [
+        HyperliquidSource(testnet=testnet, http_client=shared_http),
+        BinanceSource(http_client=shared_http),
+        CoinbaseSource(http_client=shared_http),
+        YFinanceSource(),
+        # Crypto fallbacks — no key required for free tier.
+        CryptoCompareSource(credentials=credentials),
+        CoinGeckoSource(),
+        # Macro + stock intraday — require user-provided keys.
+        FREDSource(credentials=credentials),
+        AlphaVantageSource(credentials=credentials),
+    ]
+    return SourceRouter(sources)
 
 
 def run(

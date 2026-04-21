@@ -53,6 +53,19 @@ export const universe = {
     api.del<void>(`/universe/${market_id}/tag`, { tag }),
 };
 
+export interface PresetSlot {
+  preset_id: string;
+  name: string;
+  description: string;
+  backtest_window_years: number;
+  win_rate: number;
+  sharpe: number;
+  total_return_pct: number;
+  trade_count: number;
+  max_drawdown_pct: number;
+  slot: Record<string, unknown>;
+}
+
 export const slots = {
   list: () => api.get<Slot[]>("/slots"),
   get: (id: string) => api.get<Slot>(`/slots/${id}`),
@@ -71,6 +84,9 @@ export const slots = {
       strength: number;
       rejection: string | null;
     }>(`/slots/${id}/tick`),
+  presets: () => api.get<PresetSlot[]>("/slots/presets"),
+  instantiatePreset: (presetId: string) =>
+    api.post<Slot>(`/slots/presets/${encodeURIComponent(presetId)}`),
 };
 
 export const candles = {
@@ -208,6 +224,117 @@ export const credentials = {
   update: (id: string, patch: Partial<{ label: string; api_key: string; api_secret: string; metadata: Record<string, unknown> }>) =>
     api.patch<Credential>(`/credentials/${id}`, patch),
   delete: (id: string) => api.del<void>(`/credentials/${id}`),
+  exportProfile: () =>
+    api.get<{ version: number; exported_at: string; credentials: Array<{ provider: string; label: string | null; api_key: string | null; api_secret: string | null; metadata: Record<string, unknown> }> }>(
+      "/credentials/export",
+    ),
+  importProfile: (payload: unknown, replace = false) =>
+    api.post<{ created: number; updated: number; skipped: number }>("/credentials/import", { payload, replace }),
+};
+
+export interface BalanceSnapshot {
+  id: number | null;
+  broker: string;
+  asof: string;
+  equity_usd: number;
+  cash_usd: number | null;
+  buying_power: number | null;
+  unrealised_pnl: number | null;
+  realised_pnl_today: number | null;
+  source_note: string;
+  created_at: string | null;
+}
+
+export interface BalanceSummary {
+  total_equity_usd: number;
+  per_broker: BalanceSnapshot[];
+}
+
+export const balances = {
+  supported: () => api.get<string[]>("/balances/supported"),
+  summary: () => api.get<BalanceSummary>("/balances"),
+  create: (body: {
+    broker: string;
+    equity_usd: number;
+    cash_usd?: number | null;
+    buying_power?: number | null;
+    unrealised_pnl?: number | null;
+    realised_pnl_today?: number | null;
+    asof?: string | null;
+    source_note?: string;
+  }) => api.post<BalanceSnapshot>("/balances", body),
+  delete: (id: number) => api.del<void>(`/balances/${id}`),
+  history: (broker: string, limit = 100) =>
+    api.get<BalanceSnapshot[]>(`/balances/history/${encodeURIComponent(broker)}?limit=${limit}`),
+  refresh: () =>
+    api.post<{ updated: BalanceSnapshot[]; skipped: Array<{ broker: string; reason: string }> }>("/balances/refresh"),
+};
+
+export interface PlaidItem {
+  id: string;
+  plaid_item_id: string;
+  institution_id: string | null;
+  institution_name: string | null;
+  environment: string;
+}
+
+export interface PlaidAccount {
+  id: string;
+  item_id: string;
+  plaid_account_id: string;
+  name: string | null;
+  official_name: string | null;
+  type: string | null;
+  subtype: string | null;
+  mask: string | null;
+  broker_label: string | null;
+  tracked: boolean;
+  institution_name: string | null;
+}
+
+export const plaid = {
+  createLinkToken: (body: { client_name?: string; products?: string[]; country_codes?: string[]; redirect_uri?: string | null } = {}) =>
+    api.post<{ link_token: string; expiration: string | null; request_id: string | null }>("/plaid/link-token", body),
+  exchange: (public_token: string) =>
+    api.post<PlaidItem>("/plaid/exchange", { public_token }),
+  listItems: () => api.get<PlaidItem[]>("/plaid/items"),
+  deleteItem: (iid: string) => api.del<void>(`/plaid/items/${iid}`),
+  listAccounts: () => api.get<PlaidAccount[]>("/plaid/accounts"),
+  updateAccount: (aid: string, patch: { tracked?: boolean; broker_label?: string }) =>
+    api.patch<PlaidAccount>(`/plaid/accounts/${aid}`, patch),
+  sandboxQuickLink: (institution_id = "ins_109508") =>
+    api.post<PlaidItem>("/plaid/sandbox/quick-link", { institution_id, initial_products: ["auth", "transactions"] }),
+};
+
+export interface ETradeSession {
+  connected: boolean;
+  sandbox: boolean;
+  accounts: Array<{
+    accountId: string;
+    accountIdKey: string;
+    accountDesc: string;
+    accountType: string;
+    institutionType: string;
+    tracked: boolean;
+  }>;
+  last_refreshed_at: string | null;
+}
+
+export const etrade = {
+  linkStart: () =>
+    api.post<{ authorize_url: string; request_token: string; request_token_secret: string; note: string }>(
+      "/etrade/link-start",
+    ),
+  linkComplete: (body: { request_token: string; request_token_secret: string; verifier: string }) =>
+    api.post<ETradeSession>("/etrade/link-complete", body),
+  session: () => api.get<ETradeSession>("/etrade/session"),
+  disconnect: () => api.del<void>("/etrade/session"),
+  setTracked: (accountIdKey: string, tracked: boolean) =>
+    api.patch<ETradeSession>("/etrade/accounts", { accountIdKey, tracked }),
+  refresh: () =>
+    api.post<{ snapshots: Array<Record<string, unknown>>; skipped: Array<{ account: string; reason: string }> }>(
+      "/etrade/refresh",
+    ),
 };
 
 export interface NewsItem {
@@ -247,6 +374,60 @@ export interface BootstrapStatus {
 export const bootstrap = {
   status: () => api.get<BootstrapStatus>("/bootstrap/status"),
   start: () => api.post<BootstrapStatus>("/bootstrap/start"),
+};
+
+export interface FREDSeriesInfo {
+  id: string;
+  name: string;
+  category: string | null;
+  units: string | null;
+  frequency: string | null;
+  observation_start: string | null;
+  observation_end: string | null;
+  last_updated: string | null;
+}
+
+export interface FREDObservation { timestamp: string; value: number }
+
+export interface SquawkPost {
+  id: number;
+  channel: string;
+  text: string;
+  posted_at: string;
+  link: string | null;
+}
+
+export interface SquawkLatestResponse {
+  posts: SquawkPost[];
+  status: {
+    configured: boolean;
+    channel: string | null;
+    last_polled: string | null;
+    last_error: string | null;
+    post_count: number;
+  };
+}
+
+export const squawk = {
+  latest: (limit = 100) => api.get<SquawkLatestResponse>(`/squawk/latest?limit=${limit}`),
+  refresh: () => api.post<SquawkLatestResponse>("/squawk/refresh"),
+};
+
+export const fred = {
+  popular: () => api.get<FREDSeriesInfo[]>("/fred/popular"),
+  series: (id: string, from_ts?: string, to?: string) => {
+    const q = new URLSearchParams();
+    if (from_ts) q.set("from", from_ts);
+    if (to) q.set("to", to);
+    const qs = q.toString();
+    return api.get<{ series_id: string; observations: FREDObservation[] }>(
+      `/fred/series/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`,
+    );
+  },
+  search: (q: string, limit = 30) =>
+    api.get<FREDSeriesInfo[]>(
+      `/fred/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
 };
 
 export const outcomes = {
@@ -296,12 +477,81 @@ export interface WalletSummary {
   last_updated: string;
 }
 
+export interface LivePosition {
+  symbol: string;
+  side: string;
+  size: number;
+  size_usd: number;
+  entry_price: number | null;
+  mark_price: number | null;
+  unrealised_pnl_usd: number;
+  leverage: number | null;
+  liquidation_price: number | null;
+  margin_used_usd: number | null;
+}
+
+export interface LivePositionsResponse {
+  wallet_address: string;
+  account_value_usd: number;
+  total_margin_used_usd: number;
+  total_notional_usd: number;
+  unrealised_pnl_usd: number;
+  withdrawable_usd: number;
+  positions: LivePosition[];
+}
+
+export interface Fill {
+  symbol: string;
+  side: string;
+  px: number;
+  sz: number;
+  closed_pnl_usd: number | null;
+  fee_usd: number;
+  timestamp: string;
+  is_close: boolean;
+  oid: number;
+}
+
+export interface PnLPoint {
+  timestamp: string;
+  delta: number;
+  cumulative: number;
+}
+
+export type PnLWindow = "1d" | "1w" | "1m" | "3m";
+
+export interface PnLSeriesResponse {
+  wallet_address: string;
+  window: PnLWindow;
+  bucket: "hour" | "day";
+  points: PnLPoint[];
+  realised_total_usd: number;
+  fee_total_usd: number;
+}
+
 export const wallet = {
   summary: (wallet_address?: string) => {
     const q = wallet_address ? `?wallet_address=${encodeURIComponent(wallet_address)}` : "";
     return api.get<WalletSummary>(`/wallet/summary${q}`);
   },
   activity: (limit = 25) => api.get<Order[]>(`/wallet/activity?limit=${limit}`),
+  positions: (wallet_address?: string) => {
+    const q = wallet_address ? `?wallet_address=${encodeURIComponent(wallet_address)}` : "";
+    return api.get<LivePositionsResponse>(`/wallet/positions${q}`);
+  },
+  fills: (wallet_address?: string, limit = 200) => {
+    const q = new URLSearchParams();
+    if (wallet_address) q.set("wallet_address", wallet_address);
+    q.set("limit", String(limit));
+    return api.get<Fill[]>(`/wallet/fills?${q.toString()}`);
+  },
+  pnl: (window: PnLWindow = "1m", wallet_address?: string) => {
+    const q = new URLSearchParams({ window });
+    if (wallet_address) q.set("wallet_address", wallet_address);
+    return api.get<PnLSeriesResponse>(`/wallet/pnl?${q.toString()}`);
+  },
+  setAddress: (wallet_address: string) =>
+    api.put<{ wallet_address: string }>("/wallet/address", { wallet_address }),
 };
 
 export interface NoteAttachment {

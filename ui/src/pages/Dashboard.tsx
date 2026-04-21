@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 
 import { BootstrapProgressCard } from "../components/BootstrapProgressCard";
 import { NewsPanel } from "../components/NewsPanel";
+import { PnLChart } from "../components/PnLChart";
+import { QuickTradePanel } from "../components/QuickTradePanel";
 import { TickerBar } from "../components/TickerBar";
 import { health, slots as slotsApi } from "../api/endpoints";
 import { useStream } from "../hooks/useStream";
@@ -30,6 +32,10 @@ export function Dashboard() {
       <section className="card ticker-card">
         <TickerBar symbols={["BTC", "ETH", "SOL", "HYPE", "AVAX", "ARB"]} />
       </section>
+
+      <PnLChart />
+
+      <QuickTradePanel />
 
       <BootstrapProgressCard />
 

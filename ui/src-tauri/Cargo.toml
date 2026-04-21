@@ -16,7 +16,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# ``devtools`` keeps Inspect (Ctrl+Shift+I) available in release builds —
+# needed for remote diagnostics when users hit 404s without a way to tell
+# us which URL is failing.
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

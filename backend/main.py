@@ -23,12 +23,16 @@ from backend.api import audit as audit_api
 from backend.api import (
     backtest as backtest_api,
 )
+from backend.api import balances as balances_api
 from backend.api import bootstrap as bootstrap_api
 from backend.api import (
     candles,
     health,
 )
 from backend.api import credentials as credentials_api
+from backend.api import diagnostics as diagnostics_api
+from backend.api import etrade as etrade_api
+from backend.api import fred as fred_api
 from backend.api import killswitch as killswitch_api
 from backend.api import logs as logs_api
 from backend.api import markets as markets_api
@@ -38,9 +42,11 @@ from backend.api import news as news_api
 from backend.api import notes as notes_api
 from backend.api import orders as orders_api
 from backend.api import outcomes as outcomes_api
+from backend.api import plaid as plaid_api
 from backend.api import research as research_api
 from backend.api import settings as settings_api
 from backend.api import slots as slots_api
+from backend.api import squawk as squawk_api
 from backend.api import stream as stream_api
 from backend.api import universe as universe_api
 from backend.api import vault as vault_api
@@ -50,6 +56,7 @@ from backend.db.duckdb_catalog import DuckDBCatalog
 from backend.db.paths import DEFAULT_DATA_ROOT
 from backend.services.audit import AuditService
 from backend.services.backtest import BacktestEngine
+from backend.services.balances_store import BalancesStore
 from backend.services.key_vault import KeyVault
 from backend.services.kill_switch import KillSwitchService
 from backend.services.markup_store import MarkupStore
@@ -94,7 +101,15 @@ def _cors_origins() -> list[str]:
 
 def _db_path() -> Path:
     raw = os.environ.get("BACKEND_DB_PATH")
-    return Path(raw) if raw else Path("data") / "app.db"
+    if raw:
+        return Path(raw)
+    # DEFAULT_DATA_ROOT already resolves to a user-writable path in the
+    # installed app (``%LOCALAPPDATA%\hyperliquid-bot\data``) and to
+    # ``./data`` in the dev tree — reuse it so the DB lives next to the
+    # Parquet lake instead of under ``C:\Program Files\...``.
+    path = DEFAULT_DATA_ROOT / "app.db"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _wire_services(app: FastAPI) -> None:
@@ -107,11 +122,21 @@ def _wire_services(app: FastAPI) -> None:
     db = AppDB(_db_path())
     hub = StreamHub()
     markup_store = MarkupStore(db)
+
+    # Single bridge that holds the live HyperliquidClient once the user
+    # unlocks the vault — KillSwitch / OrderService / WalletService all
+    # read through it so they flip from "pending local-only" stubs to
+    # real live trading without a service rebuild.
+    from backend.services.live_exchange import LiveExchangeBridge
+    live_exchange = LiveExchangeBridge()
+    app.state.live_exchange = live_exchange
     universe = UniverseManager(db)
     audit = AuditService(db)
     slot_repo = SlotRepository(db)
     key_vault = KeyVault()
-    kill_switch = KillSwitchService(_NoopExchange(), db, audit)
+    # KillSwitch gets the bridge — before unlock it's a noop (no live client),
+    # after unlock it flattens real positions.
+    kill_switch = KillSwitchService(live_exchange, db, audit)
     # Backtest wiring — uses the DuckDB catalog over the Parquet lake.
     bt_catalog = DuckDBCatalog(DEFAULT_DATA_ROOT)
 
@@ -122,10 +147,24 @@ def _wire_services(app: FastAPI) -> None:
     backtest_engine = BacktestEngine(candle_query=_candle_query)
     backtest_registry = backtest_api.BacktestRegistry()
 
+    # Credentials store needs to exist before the backfill service so the
+    # keyed sources (FRED / Alpha Vantage / CryptoCompare) can pick up
+    # user-stored keys at fetch time.
+    from backend.services.credentials_store import CredentialsStore
+    credentials_store = CredentialsStore(db)
+
+    # First-boot seed — load api keys from a bundled credentials_seed.json
+    # / env vars if the table is empty. Non-fatal on failure.
+    try:
+        from backend.services.credentials_seed import seed_if_empty
+        seed_if_empty(credentials_store)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("credentials seed failed (non-fatal): %s", exc)
+
     # Backfill service — powers /backfill, /candles auto-fetch, /candles/refresh.
     # Lazy import so packaging tests don't pull network deps at import time.
     try:
-        backfill_service = candles.build_default_backfill_service()
+        backfill_service = candles.build_default_backfill_service(credentials=credentials_store)
         candles.install_backfill_service(backfill_service)
     except Exception as exc:  # noqa: BLE001
         logger.warning("backfill service unavailable: %s", exc)
@@ -164,11 +203,6 @@ def _wire_services(app: FastAPI) -> None:
     live_market.start_background_poll()
     app.state.live_market = live_market
 
-    # Credentials store — third-party API keys (Binance, Alpha Vantage,
-    # etc.); Hyperliquid private keys remain in KeyVault.
-    from backend.services.credentials_store import CredentialsStore
-    credentials_store = CredentialsStore(db)
-
     # News monitor — RSS + CryptoPanic poller. Kept off by default in
     # dev to avoid noisy logs; the Dashboard panel's first GET lazy-
     # starts it on demand.
@@ -180,15 +214,42 @@ def _wire_services(app: FastAPI) -> None:
         logger.warning("news monitor failed to start: %s", exc)
     app.state.news_monitor = news_monitor
 
+    # Telegram Live Squawk — polls configured channel every 60s via bot
+    # API. Lazy-starts on first UI hit so it doesn't spawn threads on a
+    # fresh install without a telegram credential.
+    from backend.services.telegram_squawk import TelegramSquawkService
+    telegram_squawk = TelegramSquawkService(credentials_store)
+    app.state.telegram_squawk = telegram_squawk
+
+    balances_store = BalancesStore(db)
+
+    # Plaid — optional. Constructed unconditionally, but every call
+    # raises 503 until the user adds plaid creds in Sidebar → API Keys.
+    from backend.services.plaid_service import PlaidService
+    from backend.services.plaid_store import PlaidStore
+    plaid_service = PlaidService(credentials_store)
+    plaid_store = PlaidStore(db)
+
+    from backend.services.etrade_service import ETradeService
+    etrade_service = ETradeService(credentials_store)
+
     order_repo = OrderRepository(db)
     # Gateway stays None in dev until the vault is unlocked and a real
     # exchange client is constructed. OrderService accepts None and marks
     # orders as 'pending' local-only — good enough to render the chart-
     # to-order UI without risking a testnet trade during hot-reload.
-    order_service = OrderService(order_repo, gateway=None, audit=audit, markup_store=markup_store)
+    # OrderService pulls the gateway through the bridge at call time —
+    # ``gateway`` here is a thin lambda that resolves to live or falls
+    # through to pending-local depending on vault state.
+    order_service = OrderService(
+        order_repo,
+        gateway=live_exchange,
+        audit=audit,
+        markup_store=markup_store,
+    )
 
     from backend.services.wallet import WalletService
-    wallet_service = WalletService(order_repo, audit)
+    wallet_service = WalletService(order_repo, audit, balance_provider=live_exchange)
 
     app.state.db = db
     app.state.stream_hub = hub
@@ -207,6 +268,7 @@ def _wire_services(app: FastAPI) -> None:
     app.dependency_overrides[audit_api.get_audit_service] = lambda: audit
     app.dependency_overrides[slots_api.get_slot_repo] = lambda: slot_repo
     app.dependency_overrides[vault_api.get_vault] = lambda: key_vault
+    app.dependency_overrides[vault_api.get_settings_for_vault] = lambda: settings_store
     app.dependency_overrides[killswitch_api.get_kill_switch] = lambda: kill_switch
     app.dependency_overrides[orders_api.get_order_service] = lambda: order_service
     app.dependency_overrides[orders_api.get_markup_store_for_orders] = lambda: markup_store
@@ -218,11 +280,25 @@ def _wire_services(app: FastAPI) -> None:
     app.dependency_overrides[credentials_api.get_credentials_store] = lambda: credentials_store
     app.dependency_overrides[news_api.get_news_monitor] = lambda: news_monitor
     app.dependency_overrides[bootstrap_api.get_macro_seed] = lambda: macro_seed
+    app.dependency_overrides[fred_api.get_credentials_for_fred] = lambda: credentials_store
+    app.dependency_overrides[diagnostics_api.get_credentials_for_diag] = lambda: credentials_store
+    app.dependency_overrides[squawk_api.get_squawk_service] = lambda: telegram_squawk
     app.dependency_overrides[analog_api.get_analog_engine] = lambda: analog_engine
     app.dependency_overrides[models_api.get_model_registry] = lambda: model_registry
     app.dependency_overrides[settings_api.get_settings_store] = lambda: settings_store
     app.dependency_overrides[notes_api.get_notes_store] = lambda: notes_store
     app.dependency_overrides[wallet_api.get_wallet_service] = lambda: wallet_service
+    app.dependency_overrides[wallet_api.get_settings_for_wallet] = lambda: settings_store
+    app.dependency_overrides[balances_api.get_balances_store] = lambda: balances_store
+    app.dependency_overrides[balances_api.get_credentials_for_balances] = lambda: credentials_store
+    app.dependency_overrides[balances_api.get_live_market_for_balances] = lambda: live_market
+    app.dependency_overrides[balances_api.get_plaid_service_for_balances] = lambda: plaid_service
+    app.dependency_overrides[balances_api.get_plaid_store_for_balances] = lambda: plaid_store
+    app.dependency_overrides[plaid_api.get_plaid_service] = lambda: plaid_service
+    app.dependency_overrides[plaid_api.get_plaid_store] = lambda: plaid_store
+    app.dependency_overrides[etrade_api.get_etrade_service] = lambda: etrade_service
+    app.dependency_overrides[etrade_api.get_etrade_credentials] = lambda: credentials_store
+    app.dependency_overrides[etrade_api.get_etrade_balances_store] = lambda: balances_store
 
 
 @asynccontextmanager
@@ -282,11 +358,17 @@ def create_app() -> FastAPI:
     app.include_router(settings_api.router)
     app.include_router(notes_api.router)
     app.include_router(wallet_api.router)
+    app.include_router(balances_api.router)
+    app.include_router(plaid_api.router)
+    app.include_router(etrade_api.router)
     app.include_router(logs_api.router)
     app.include_router(markets_api.router)
     app.include_router(credentials_api.router)
     app.include_router(news_api.router)
     app.include_router(bootstrap_api.router)
+    app.include_router(fred_api.router)
+    app.include_router(diagnostics_api.router)
+    app.include_router(squawk_api.router)
     app.include_router(stream_api.router)
     return app
 

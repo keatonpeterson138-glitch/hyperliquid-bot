@@ -53,8 +53,13 @@ def _row_to_model(row: Any) -> ModelRecord:
 
 
 class ModelRegistry:
-    def __init__(self, db: AppDB, root: Path | str = "data/models") -> None:
+    def __init__(self, db: AppDB, root: Path | str | None = None) -> None:
         self.db = db
+        if root is None:
+            # Anchor to the resolved data root so Program-Files installs
+            # don't try to write joblib pickles into a read-only dir.
+            from backend.db.paths import DEFAULT_DATA_ROOT
+            root = DEFAULT_DATA_ROOT / "models"
         self.root = Path(root)
 
     # ── Writes ─────────────────────────────────────────────────────

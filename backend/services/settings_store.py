@@ -15,7 +15,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PATH = Path("data") / "settings.json"
+def _default_path() -> Path:
+    # Anchor to the resolved data root so the installer-bundled app doesn't
+    # try to write into Program Files. Matches the DB + lake location.
+    from backend.db.paths import DEFAULT_DATA_ROOT
+    return DEFAULT_DATA_ROOT / "settings.json"
+
+
+DEFAULT_PATH: Path = _default_path()
 
 
 @dataclass

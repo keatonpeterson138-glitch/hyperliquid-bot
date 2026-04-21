@@ -42,9 +42,12 @@ class MLStrategy(BaseStrategy):
         if df is None or df.empty:
             return Signal(SignalType.HOLD, 0.0, "no data")
         features = self.feature_set.compute(df)
-        row = features.iloc[[-1]].dropna(axis=1, how="all")
-        if row.isna().any().any():
-            return Signal(SignalType.HOLD, 0.0, "features incomplete")
+        row = features.iloc[[-1]]
+        # Fill any missing feature values with 0 so we preserve the full
+        # column set the model was trained on. Features that aren't yet
+        # resolved (e.g. ret_240 with only 200 bars) will be NaN — 0 is
+        # the neutral prior for every feature in momentum_v1.
+        row = row.reindex(columns=self.record.features, fill_value=0.0).fillna(0.0)
         proba = _predict_proba(self.model, row)[0]
 
         if proba >= self.long_threshold:

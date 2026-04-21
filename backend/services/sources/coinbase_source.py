@@ -74,9 +74,14 @@ class CoinbaseSource:
             self._client.close()
 
     def supports(self, symbol: str, interval: str) -> bool:
-        if ":" in symbol:
+        if not symbol or interval not in _INTERVAL_S:
             return False
-        return interval in _INTERVAL_S and bool(symbol)
+        if ":" in symbol or "=" in symbol or symbol.startswith("^"):
+            return False
+        from backend.services.sources.hyperliquid_source import _NON_HYPERLIQUID_SYMBOLS
+        if symbol.upper() in _NON_HYPERLIQUID_SYMBOLS:
+            return False
+        return True
 
     def earliest_available(self, symbol: str, interval: str) -> datetime | None:
         return _EARLIEST.get(symbol.upper())

@@ -184,13 +184,16 @@ def list_catalog(*, data_root: Path | None = None) -> pd.DataFrame:
 
 
 def _sanitize_symbol(symbol: str) -> str:
-    return symbol.replace(":", "__").replace("/", "_")
+    # Single source of truth in paths._sanitize — handles ``:``, ``=``, and ``/``.
+    from backend.db.paths import _sanitize
+    return _sanitize(symbol)
 
 
 def _unsanitize_symbol(value: Any) -> str:
     if pd.isna(value):
         return value
-    return str(value).replace("__", ":")
+    from backend.db.paths import unsanitize_symbol
+    return unsanitize_symbol(str(value))
 
 
 def _ensure_utc(dt: datetime) -> datetime:

@@ -3,10 +3,13 @@ import { NavLink } from "react-router-dom";
 const NAV: Array<{ to: string; label: string; group?: string }> = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/wallet", label: "Wallet" },
+  { to: "/balances", label: "Balances" },
   { to: "/charts", label: "Charts" },
+  { to: "/squawk", label: "Live Squawk" },
   { to: "/outcomes", label: "Outcomes" },
   { to: "/slots", label: "Slots" },
   { to: "/data", label: "Data Lab", group: "research" },
+  { to: "/fred", label: "FRED Explorer", group: "research" },
   { to: "/universe", label: "Universe", group: "research" },
   { to: "/research", label: "Research", group: "research" },
   { to: "/backtest", label: "Backtest", group: "research" },
@@ -17,6 +20,7 @@ const NAV: Array<{ to: string; label: string; group?: string }> = [
   { to: "/vault", label: "Vault", group: "other" },
   { to: "/apikeys", label: "API Keys", group: "other" },
   { to: "/settings", label: "Settings", group: "other" },
+  { to: "/tutorial", label: "Tutorial", group: "other" },
 ];
 
 export function Sidebar() {

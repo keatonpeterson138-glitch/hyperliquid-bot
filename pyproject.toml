@@ -22,6 +22,7 @@ filterwarnings = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "network: marks tests that require network access",
+    "live: hits real public data-provider APIs (run with -m live)",
 ]
 
 [tool.ruff]

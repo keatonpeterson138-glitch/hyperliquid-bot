@@ -3,6 +3,9 @@
 *.env
 !.env.example
 
+# User-local credential seed (baked into the user's installer only)
+backend/config/credentials_seed.json
+
 # Testing and tooling caches
 .claude/
 .pytest_cache/

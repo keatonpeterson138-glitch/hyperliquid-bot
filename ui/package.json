@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "ethers": "^6.16.0",
     "lightweight-charts": "^5.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-plaid-link": "^4.1.1",
     "react-router-dom": "^7.0.0"
   },
   "devDependencies": {

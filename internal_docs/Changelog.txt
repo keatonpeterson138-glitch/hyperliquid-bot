@@ -191,3 +191,106 @@ Migration 005 — `notes` + `note_attachments` + `notification_events`. `NotesSt
 - Deleting `gui/`, `dashboard.py`, `bot.py` — requires explicit user approval; left intact.
 
 ---
+
+## 2026-04-20 — Plaid + E*Trade + credentials profile export/import
+
+### Summary
+Real broker integrations — no more copy-paste balances. Plaid covers the universe (Fidelity, Robinhood, BoA, etc.); E*Trade is direct OAuth 1.0a because their docs are public + free. Plus: a plain-JSON credential profile export/import so reinstalls don't wipe every API key.
+
+### Backend
+- `backend/services/plaid_service.py` — httpx wrapper over Plaid's REST API (`/link/token/create`, `/item/public_token/exchange`, `/accounts/get`, `/accounts/balance/get`, `/item/remove`, sandbox shortcut). Config pulled from `credentials` table provider='plaid' with metadata.environment.
+- `backend/services/plaid_store.py` — `plaid_items` (access_token, institution) + `plaid_accounts` (tracked flag, broker_label mapping) with FK cascade.
+- `backend/services/etrade_service.py` — full OAuth 1.0a signer (HMAC-SHA1 by hand, no requests-oauthlib dep). request_token → authorize_url → verifier → access_token flow. `list_accounts` + `account_balance` for the refresh path.
+- `backend/api/plaid.py`, `backend/api/etrade.py` — link flows + account tracking toggles + session management.
+- `backend/api/balances.py` `/balances/refresh` — aggregates Plaid tracked accounts by `broker_label`, records one snapshot per broker. E*Trade has its own `/etrade/refresh`.
+- `backend/api/credentials.py` — new `GET /credentials/export` + `POST /credentials/import` (replace or merge). Raw values in export; masked elsewhere.
+- `backend/services/credentials_store.py` — `export_profile()` + `import_profile()`. New providers: `plaid`, `etrade`, `fred`.
+- `backend/db/migrations/008_plaid.sql` — schema_version = 8.
+
+### UI
+- `ui/src/pages/BalancesPage.tsx` — summary + per-broker cards + Plaid section (uses `react-plaid-link`) + E*Trade section (verifier-code UX) + manual entry form.
+- `ui/src/pages/SquawkPage.tsx` — 15s-polled Telegram feed.
+- `ui/src/pages/APIKeysPage.tsx` — metadata JSON field for provider-specific config (Plaid environment, E*Trade sandbox, Telegram channel). Export/Import profile buttons with file picker + replace/merge choice.
+- `ui/src/App.tsx`, `ui/src/components/Sidebar.tsx` — new Balances / Live Squawk / FRED Explorer routes.
+- `ui/package.json` — added `react-plaid-link`, `@tauri-apps/plugin-shell`.
+
+### Tests (21 new, all green)
+- `tests/unit/backend/services/test_credentials_profile.py` — export/import round-trip, replace vs merge, unknown-provider skip, malformed payload rejection.
+- `tests/unit/backend/services/test_plaid_store.py` — item upsert, account upsert preserves broker_label via COALESCE, FK cascade, tracked filter.
+- `tests/unit/backend/services/test_etrade_service.py` — RFC 5849 percent-encoding, HMAC-SHA1 determinism, header param filtering, full request_token/access_token/list_accounts flows against a mocked client.
+- `tests/unit/backend/db/test_app_db.py` — schema_version bumped to 8; new `balances`, `plaid_items`, `plaid_accounts` tables asserted.
+
+### Gaps deliberately left for later passes
+- Chart tile indicators (EMA/RSI/volume), overlays (compare symbols), workspace persistence — tracked on the task list as #36/#37/#38.
+- Coinbase Advanced Trade / Kraken / Hyperliquid direct-API balance refresh — stubbed in `/balances/refresh` with "next iteration" notes.
+- Encrypted credential export — current export is plain JSON per user's ask; passphrase + Fernet wrapper deferred.
+
+
+## 2026-04-20 (evening) — Chart workspace indicators, overlays, persistence
+
+### Summary
+Closed the three chart tasks in the queue in a single pass. Each tile now has a chart-type toggle (candle/bar/line/area), EMA 12/26/50/200 overlays, a 14-period RSI subpane, volume + log-scale toggles, and can overlay compare-to symbols rebased to 100. The entire workspace (layout + per-tile config) persists to localStorage so switching tabs or restarting the app no longer wipes the setup.
+
+### Files
+- `ui/src/lib/indicators.ts` — pure EMA/RSI/rebase-to-100 math.
+- `ui/src/lib/workspaceStorage.ts` — versioned `charts.workspace.v1` serialization; `loadWorkspace()` / `saveWorkspace()` / `defaultTile()`.
+- `ui/src/components/CandleChart.tsx` — full rewrite: dynamic main series (Candle/Bar/Line/Area), toggleable Volume histogram, per-EMA LineSeries, RSI on pane index 1 via `addSeries(..., 1)`, overlay LineSeries on a dedicated `priceScaleId: "overlay"` axis, PriceScaleMode.Logarithmic switch.
+- `ui/src/components/ChartTile.tsx` — new toolbar: chart-type dropdown, Indicators popover, Overlays popover (catalog dropdown + free-text input), overlay badge list with per-entry swatch + remove. Fetches each overlay symbol's bars and hands them to the chart as `OverlaySeries[]`.
+- `ui/src/pages/Charts.tsx` — hydrates from localStorage on mount, persists on every state change, "Reset workspace" button.
+- `ui/src/App.css` — menu/popover + overlay swatch styles.
+
+### Notes on the lightweight-charts v5 API
+- `chart.addSeries(LineSeries, opts, 1)` creates a second pane (the paneIndex param). We use this for RSI and size it via `chart.panes()[1].setHeight(...)`.
+- Overlays share a custom `priceScaleId: "overlay"` with margin `{ top: 0.05, bottom: 0.25 }` so they don't collide with the price axis.
+- `PriceScaleMode.Logarithmic` is toggled via `rightPriceScale.mode` — cleanest way to swap linear ↔ log.
+
+
+## 2026-04-20 (late evening) — Trading core: presets, live wallet, PnL, tutorial, audit
+
+### Summary
+Closing-the-loop push: backtested preset library, live HL wallet wiring (reuses the legacy `core.exchange.HyperliquidClient` — no MetaMask needed), live positions/fills/PnL endpoints + UI, in-app tutorial, full trading-flow audit. After this push the app goes from "shell with components" to "you can actually use it to track and place real Hyperliquid trades".
+
+### Backend
+- `backend/services/preset_slots.py` — 4 backtested winners (Keltner+Williams on SPY/QQQ, all 77-80% WR, Sharpe 1.86-3.17). `GET /slots/presets` + `POST /slots/presets/{id}` to instantiate.
+- `backend/services/live_exchange.py` — **`LiveExchangeBridge`** singleton that holds the live `HyperliquidClient` post-vault-unlock. Wired into `KillSwitchService` (replaces _NoopExchange), `OrderService.gateway`, `WalletService.balance_provider`. Detached on lock.
+- `backend/api/vault.py` — `POST /vault/unlock` now ALSO attaches the live bridge + persists wallet address to settings; `POST /vault/lock` detaches.
+- `backend/services/hl_user_state.py` — thin httpx wrapper for HL public Info: `clearinghouseState`, `userFills`, derives `pnl_series` (cumulative realised PnL bucketed hourly/daily).
+- `backend/api/wallet.py` — new endpoints: `/wallet/positions`, `/wallet/fills`, `/wallet/pnl?window=1d|1w|1m|3m`, `PUT /wallet/address`. All work read-only with just the master address (no key).
+- 5 strategies added: `connors_rsi2`, `bb_fade`, `keltner_reversion`, `williams_mean_rev`, `gap_fill` (in `strategies/`, registered in `factory.py`). Factory accepts both kwargs and positional dict forms (backtest engine compatibility).
+
+### Source-routing fixes (latent bugs)
+- `HyperliquidSource.supports`, `BinanceSource.supports`, `CoinbaseSource.supports` now reject equity/futures/macro tickers (`=`, `^`, well-known stock symbols) so the router falls through to yfinance instead of trying crypto sources for SPY/TSLA/GC=F.
+- `backend/db/paths._sanitize` — handles `=` (collides with Hive `key=value` partition syntax) on top of existing `:` and `/` substitution.
+- `backend/db/migrations/migrate.py` — fallback to `_MEIPASS/backend/db/migrations` for PyInstaller frozen builds.
+- `backend/services/settings_store.py`, `backend/services/ml/registry.py`, `backend/api/logs.py` — anchor to `DEFAULT_DATA_ROOT` instead of relative `data/` (was failing in `C:\Program Files\` installs).
+
+### Spec / build
+- `backend-sidecar.spec` — removed `yfinance` from excludes + added to hidden imports (was breaking TSLA/GOLD chart fetches in installed mode). Bundles `lxml`, `html5lib`, `multitasking`, `frozendict`, `peewee` for yfinance runtime.
+- `ui/src-tauri/Cargo.toml` — added `devtools` feature so Ctrl+Shift+I works in release.
+- `ui/src-tauri/src/sidecar.rs` — `kill_zombie_sidecars()` now port-based (kills any process holding 8787 regardless of exe name) — fixes the recurring "stale install holds the port" bug.
+- `scripts/sidecar_entry.py` — early `_boot_log` call (writes to `%LOCALAPPDATA%\hyperliquid-bot\logs\boot.log`) so we have a forensic trail when the Tauri shell's stdout capture is invisible.
+
+### UI
+- `ui/src/pages/TutorialPage.tsx` — 12-section in-app tutorial (install, API keys, wallet, charts, slots, backtesting, models, data, news, safety, filesystem). Sidebar → Other → Tutorial.
+- `ui/src/components/QuickTradePanel.tsx` — symbol picker (HL universe), long/short toggle, market/limit, SL/TP with quick-% chips, live mark price, big colored submit. Used on Dashboard.
+- `ui/src/components/PnLChart.tsx` — cumulative realised PnL line, 1D/1W/1M/3M toggle buttons, green/red tint by direction, "set wallet address" CTA when unset.
+- `ui/src/pages/WalletPage.tsx` — full rebuild: paste address → live positions table (entry/mark/liq/lev/unrealized) + trade-history table + local-orders table.
+- `ui/src/pages/SlotsPage.tsx` — "Backtested presets" card grid with WR/Sharpe/Return badges + 1-click Add slot.
+- `api.put` helper added.
+
+### Docs
+- `internal_docs/trading_presets.md` — full 35-pair backtest report card + curation rule + reproduction command.
+- `internal_docs/trading_flow_audit.md` — UX audit covering 9 sections, 5 priority gaps, MetaMask agent flow design (deferred since legacy private-key flow is already wired).
+- `README.md` — rewritten to lead with the desktop installer experience (download MSI from Releases, install, launch). Legacy CLI / Tkinter section retained at the bottom.
+- `docs/install.md` — step-by-step install guide (download → SmartScreen → install → first launch → API keys → wallet connect → updating → uninstalling).
+
+### Tests
+- 423 passing. Preset library + 5 new strategies + factory signature change covered by existing strategy tests.
+
+### What this push does NOT include
+- MetaMask agent-wallet flow — deferred. Legacy `private_key + wallet_address` via the Vault is the wired path. Design fully specced in `trading_flow_audit.md` for the next push.
+- Per-slot PnL — design in audit doc.
+- In-app log viewer — design in audit doc.
+- Chart-markup → order-ticket wiring — design in audit doc.
+- macOS / Linux installer matrix — only Windows MSI shipping today.
+

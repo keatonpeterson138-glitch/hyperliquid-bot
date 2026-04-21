@@ -83,6 +83,34 @@ def delete_credential(cid: str, store: StoreDep) -> None:
     store.delete(cid)
 
 
+class ImportRequest(BaseModel):
+    payload: dict[str, Any]
+    replace: bool = False
+
+
+class ImportResult(BaseModel):
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
+@router.get("/credentials/export")
+def export_profile(store: StoreDep) -> dict[str, Any]:
+    """Dump every credential with raw values — used by the Settings
+    "Export API keys" button. The response body IS the file content the
+    UI writes to disk."""
+    return store.export_profile()
+
+
+@router.post("/credentials/import", response_model=ImportResult)
+def import_profile(req: ImportRequest, store: StoreDep) -> ImportResult:
+    try:
+        result = store.import_profile(req.payload, replace=req.replace)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ImportResult(**result)
+
+
 def _to_out(cred) -> CredentialOut:
     return CredentialOut(
         id=cred.id, provider=cred.provider, label=cred.label,

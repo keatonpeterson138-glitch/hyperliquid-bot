@@ -86,9 +86,24 @@ def outcome_glob(data_root: Path) -> str:
 
 
 def _sanitize(component: str) -> str:
-    """HIP-3 symbols have `:` which Windows can't handle in paths."""
-    return component.replace(":", "__").replace("/", "_")
+    """Make a symbol safe for both Windows paths and Hive partition keys.
+
+    * ``:`` — HIP-3 namespace separator (xyz:TSLA), not legal on Windows.
+    * ``=`` — collides with Hive's ``key=value`` partition syntax; DuckDB
+      misparses ``symbol=GC=F`` and refuses the read.
+    * ``/`` — directory separator everywhere.
+    """
+    return (
+        component
+        .replace(":", "__")
+        .replace("=", "--EQ--")
+        .replace("/", "_")
+    )
 
 
 def unsanitize_symbol(component: str) -> str:
-    return component.replace("__", ":")
+    return (
+        component
+        .replace("__", ":")
+        .replace("--EQ--", "=")
+    )

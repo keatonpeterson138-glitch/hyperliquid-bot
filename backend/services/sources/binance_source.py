@@ -79,9 +79,18 @@ class BinanceSource:
             self._client.close()
 
     def supports(self, symbol: str, interval: str) -> bool:
-        if ":" in symbol:
+        if not symbol or interval not in _INTERVAL_MS:
             return False
-        return interval in _INTERVAL_MS and bool(symbol)
+        # Hyperliquid HIP-3 perps (xyz:TSLA, cash:GOLD), futures with "=",
+        # and indices with "^" are not on Binance Spot.
+        if ":" in symbol or "=" in symbol or symbol.startswith("^"):
+            return False
+        # Reject well-known equity / FRED tickers — Binance Spot is
+        # crypto-only and would 4xx for these.
+        from backend.services.sources.hyperliquid_source import _NON_HYPERLIQUID_SYMBOLS
+        if symbol.upper() in _NON_HYPERLIQUID_SYMBOLS:
+            return False
+        return True
 
     def earliest_available(self, symbol: str, interval: str) -> datetime | None:
         return _EARLIEST.get(symbol.upper())

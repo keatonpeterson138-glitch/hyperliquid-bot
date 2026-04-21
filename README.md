@@ -1,189 +1,237 @@
 # Hyperliquid Trading Bot
 
-Automated perpetual futures + prediction-market trading bot for [Hyperliquid](https://hyperliquid.xyz/), with configurable strategies, multi-slot position management, risk management, and real-time notifications.
+Desktop trading app for [Hyperliquid](https://hyperliquid.xyz/) — perps, HIP-3 stocks/commodities/indices, and HIP-4 prediction markets. Native installer for Windows. Tauri + React UI on top of a Python FastAPI sidecar.
 
-**Status:** v1.0 scope shipped — all 14 phases complete (Phases 0–13). 402 tests passing, ruff clean. Native cross-OS installer builds + final vault-gated exchange wiring are the remaining items before tagging the mainnet release. See [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) + [`internal_docs/PHASE_5p5_TO_12_PLAN.md`](internal_docs/PHASE_5p5_TO_12_PLAN.md) for the architecture, [`docs/getting_started.md`](docs/getting_started.md) for the user quickstart.
+**Status:** v0.2 (release candidate). All Phase 0–13 work complete: backtested presets, MetaMask-free vault flow (uses Hyperliquid's standard `private_key` + `wallet_address`), live position + PnL tracking, in-app tutorial, 423 tests green.
 
-## Supported Markets
+---
 
-- **Native Hyperliquid perps** — BTC, ETH, SOL, HYPE, and ~100 other crypto perps.
-- **HIP-3 builder-deployed perps** (via `trade.xyz` and other deployers):
-  - **Stocks:** NVDA, TSLA, AAPL, MSFT, GOOGL, AMZN, META, HOOD, INTC, PLTR, COIN, NFLX, MSTR, AMD, TSM
-  - **Indices:** SP500 (S&P-licensed, up to 50×), XYZ100 (Nasdaq-100)
-  - **Commodities:** gold, silver, crude oil, corn, wheat
-  - **FX** pairs
-- **HIP-4 outcome contracts** — prediction markets (testnet live; mainnet rolling out).
+## Download & install
+
+### Windows (built MSI)
+
+The pre-built installer is published as a GitHub Release.
+
+1. Go to **[Releases](../../releases)** in this repo.
+2. Download the latest `Hyperliquid Bot_<version>_x64_en-US.msi` (~143 MB).
+3. Double-click. Windows SmartScreen will warn "publisher unknown" — click **More info → Run anyway** (the binary is unsigned because we don't pay for a code-signing cert yet; build it yourself if you don't trust the upload).
+4. Follow the install wizard. Defaults are fine.
+5. Launch from Start menu → "Hyperliquid Bot".
+6. First launch takes ~15 seconds while the bundled Python runtime extracts. After that, instant.
+
+**That's it** — the app handles everything else (auto-creates the data folder, seeds preloaded API keys, loads the macro chart history in the background).
+
+### Build from source (Linux / macOS / Windows)
+
+See [`docs/building.md`](docs/building.md) for the full build pipeline. Short version:
+
+```bash
+git clone https://github.com/<you>/hyperliquid-bot
+cd hyperliquid-bot
+
+# WSL or Linux: run the cross-build script (rsyncs to a Windows mount, then PowerShell-builds the MSI)
+./scripts/sync_to_windows.sh --build
+
+# Or build natively on Windows from PowerShell:
+.\scripts\build_windows.ps1
+```
+
+Output lands at `ui/src-tauri/target/release/bundle/msi/Hyperliquid Bot_<ver>_x64_en-US.msi`.
+
+---
+
+## What's in the install
+
+The MSI bundles **everything** — no separate Python install, no `pip install`, no Node/Rust toolchain on the user's machine. After install you have:
+
+| Component | Where | What it does |
+|---|---|---|
+| `hyperliquid-bot.exe` | `C:\Program Files\Hyperliquid Bot\` | Tauri shell — the actual desktop app you launch |
+| `backend-sidecar.exe` | `C:\Program Files\Hyperliquid Bot\` | Frozen Python FastAPI server (uvicorn + pandas + duckdb + sklearn + yfinance + Hyperliquid SDK), 140 MB |
+| WebView2 runtime | system | Chromium-based web view that renders the React UI (preinstalled on Windows 11) |
+
+Per-user data lives at `%LOCALAPPDATA%\hyperliquid-bot\`:
+
+| Path | What |
+|---|---|
+| `data\app.db` | SQLite — slots, audit log, credentials, balances, plaid, notes |
+| `data\settings.json` | App settings |
+| `data\models\` | Trained ML models |
+| `data\parquet\ohlcv\` | OHLCV market-data lake (Hive-partitioned by symbol/interval/year) |
+| `logs\boot.log` | Sidecar boot history (every launch appended) |
+| `logs\backend.log` | Full structured logs (rotating, 5 MB × 3 backups) |
+
+---
+
+## System requirements
+
+- **Windows 10/11 x64** with WebView2 (auto-installed on Win11; Win10 may need the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/)).
+- ~500 MB free disk for the install + PyInstaller cache + initial market-data seed.
+- An internet connection (for live prices, market data, and trading itself).
+- A Hyperliquid wallet (testnet or mainnet) — see "Connect your wallet" below.
+
+**Optional but recommended:**
+- A FRED API key (free, [register here](https://fred.stlouisfed.org/docs/api/api_key.html)) for the macro Explorer. The MSI ships with a starter key preloaded, but it's rate-limited.
+- An Alpha Vantage key (free, 25 req/day, [register here](https://www.alphavantage.co/support/#api-key)) for stock chart data.
+
+---
+
+## First-time setup walkthrough
+
+After install, launch the app. The in-app **Tutorial** tab (sidebar → Other → Tutorial) is the canonical guide. Highlights:
+
+### 1. Connect your Hyperliquid wallet (read-only)
+
+Sidebar → **Wallet** → paste your master Hyperliquid wallet address (starts with `0x...`). Click Save. The app immediately starts pulling live positions, fill history, and PnL via Hyperliquid's public Info API. **No private key required for read-only mode** — works for any address you want to track.
+
+### 2. Enable trading (private-key required)
+
+Sidebar → **Vault** → enter `wallet_address` + `private_key`. Stored in the OS keychain (Windows Credential Manager), never in a file. Click **Unlock** to spin up the live `HyperliquidClient`. After unlock:
+- Quick Trade panel on Dashboard executes real orders
+- Slot bots (preset or custom) actually trade
+- Kill Switch flattens real positions
+
+This is the same `private_key + wallet_address` flow the legacy `bot.py` / `dashboard.py` use — fully reused.
+
+### 3. Run a backtested preset
+
+Sidebar → **Slots** → "Backtested presets" panel. Pick one of the 4 winners (Keltner Reversion / Williams %R on SPY or QQQ — all 77-80% WR, 1.86-3.17 Sharpe over 20 years; full report card in [`internal_docs/trading_presets.md`](internal_docs/trading_presets.md)). Click **+ Add slot** — created **disabled**. Click **Start** when you're ready.
+
+### 4. Manual trade
+
+Dashboard → **Quick Trade** panel. Symbol picker (full Hyperliquid universe), long/short toggle, size, leverage, market or limit, SL/TP with quick-% chips. Click the colored Submit button.
+
+---
 
 ## Features
 
 ### Trading
-- Multiple built-in strategies: EMA crossover, RSI mean reversion, breakout, funding dip, outcome-market arbitrage.
-- Up to **5 concurrent position slots**, each with its own symbol / interval / strategy / risk parameters.
-- Per-slot filters: trailing stops, multi-timeframe confirmation, regime filter, ATR stops, loss cooldown, volume confirm, RSI guard.
-- Timeframe-preset SL/TP/leverage recommendations (1m scalp → 1d position).
+- **5 backtested strategies** — `connors_rsi2`, `bb_fade`, `keltner_reversion`, `williams_mean_rev`, `gap_fill`. Each with a published walk-forward backtest: WR, Sharpe, max DD, return.
+- **4 preset slots** ready to instantiate (highest WR pairs from the bench).
+- **Quick Trade panel** — manual market/limit orders with bracket SL+TP.
+- **Up to 8 concurrent slot bots**, each with own symbol / interval / strategy / risk.
+- **Slot filters**: trailing stops, MTF confirmation, regime filter, ATR stops, loss cooldown, volume confirm, RSI guard.
+- **Kill switch** in the title bar — flatten + cancel + disable everything in one click.
 
-### Risk Management
-- Stop-loss and take-profit per position.
-- Daily loss circuit breaker.
-- Max open positions cap.
-- Mainnet + testnet support.
+### Charts
+- 1 / 2 / 4 / 8 tile workspace, persists across tab switches and app restarts.
+- Chart types: candle / bar / line / area, log-scale toggle.
+- Indicators: EMA 12/26/50/200, RSI(14) subpane, volume.
+- Compare-mode overlays (multiple symbols rebased to 100).
+- Markup tools: lines, horizontal levels, Fibonacci. Right-click → trade ticket.
+- Live Hyperliquid WebSocket per tile.
+- Symbol catalog covers HL crypto + HIP-3 perps (xyz:TSLA / cash:GOLD) + stocks (AAPL/NVDA/TSLA) + indices (^GSPC/^VIX) + FRED macro (DGS10/CPIAUCSL/M2SL).
 
-### Prediction Markets (HIP-4)
-- Outcome contract discovery and pricing.
-- `outcome_arb` strategy for theoretical-vs-market edge trading.
-- Real-time monitoring and event tracking.
+### Wallet & PnL
+- Live positions table — entry / mark / liq / leverage / margin / unrealized PnL.
+- Live trade history — last 200 fills with closed PnL + fees.
+- Cumulative realised-PnL chart on the Dashboard with **1D / 1W / 1M / 3M** toggles.
+- All from Hyperliquid's `clearinghouseState` + `userFills` (read-only Info API).
 
-### Notifications
-- Email alerts (SMTP).
-- Telegram bot alerts.
+### Data
+- DuckDB catalog over a Parquet lake, Hive-partitioned by `symbol/interval/year`.
+- Macro auto-seed on first launch — S&P, Nasdaq, WTI, Gold, Silver, BTC, ETH, SOL across 1d (20y) + 1h (1-3y).
+- 8 sources stitched: Hyperliquid + Binance + Coinbase + yfinance + CryptoCompare + CoinGecko + FRED + Alpha Vantage.
+- "Load history" button on Data Lab for on-demand backfill of any (symbol, interval).
 
-### UI
-- Current: Tkinter desktop dashboard (`dashboard.py`) — slot manager, live P&L, predictions board, news, logs, settings.
-- Planned for v1.0: Tauri + React desktop app with TradingView-style charts, drawing tools, backtest lab, ML training, analog/pattern search, mainnet-grade hardening.
+### Research & ML
+- Backtest engine (single-run + sweep + Monte Carlo).
+- Triple-barrier ML labeling + purged k-fold CV (de Prado AFML).
+- Optuna hyperparameter search.
+- Analog / pattern search.
+- FRED macro Explorer with 20 popular series + free-text search.
 
-## Quick Start
+### Other
+- Balances tab — multi-broker EoD equity (Plaid for Fidelity/Robinhood/etc.; E*Trade direct OAuth).
+- Live Squawk — Telegram channel scraper (no auth).
+- News panel — RSS + CryptoPanic poller.
+- API Keys export/import for cross-machine setups.
+- Append-only audit log of every order + config change (CSV exportable).
+- 12-section in-app Tutorial.
 
-### 1. Install
+---
 
-```bash
-pip install -r requirements.txt
-```
+## Safety defaults
 
-### 2. Configure
+- Vault locked at startup → no trading possible until you explicitly unlock.
+- Kill Switch always visible in the title bar.
+- Confirmation modals above configurable $ + % thresholds.
+- Daily-loss circuit breaker.
+- Aggregate exposure cap across slots.
+- Append-only audit log (uneditable from the UI).
+- Optional shadow mode — every live slot replays on testnet, divergence alerts.
 
-Copy `.env.example` to `.env` and set:
-
-```ini
-PRIVATE_KEY=<your wallet private key, no 0x prefix>
-WALLET_ADDRESS=0x...
-USE_TESTNET=true        # start on testnet!
-SYMBOL=BTC
-STRATEGY=ema_crossover
-CANDLE_INTERVAL=1h
-POSITION_SIZE_USD=100
-MAX_LEVERAGE=3
-```
-
-For HIP-3 markets, use the `dex:symbol` format (e.g. `SYMBOL=xyz:TSLA`, `SYMBOL=cash:GOLD`) and set `DEX=xyz` or `DEX=cash` accordingly.
-
-For multi-slot, configure `SLOT_1`..`SLOT_5` via the Settings tab in the dashboard, or edit `.env` directly:
-
-```
-SLOT_1=BTC|1h|ema_crossover|2.0|4.0|3|true|1000|{}|false|true|false|false|true|false|false|30|70
-```
-
-### 3. Run
-
-CLI single-slot loop:
-
-```bash
-python bot.py
-```
-
-Desktop dashboard (recommended):
-
-```bash
-python dashboard.py
-```
-
-### 4. Test Setup
-
-Before running live:
-
-```bash
-python test_setup.py    # verify credentials and exchange connectivity
-python test_trade.py    # place + cancel a test order (testnet only)
-```
+---
 
 ## Strategies
 
-| Name | Logic | Best For |
-|---|---|---|
-| `ema_crossover` | Buy when fast EMA crosses above slow; sell when it crosses below | Trending markets |
-| `rsi_mean_reversion` | Buy oversold (RSI < 30), sell overbought (RSI > 70) | Range-bound markets |
-| `breakout` | Buy on resistance break, sell on support break | Volatile markets with defined S/R |
-| `funding_dip` | Fade extreme funding-rate moves on perps | Overheated / crashing funding |
-| `outcome_arb` | HIP-4 prediction-market edge vs theoretical pricing model | Prediction markets |
+| Name | Logic | Best for | Backtest WR |
+|---|---|---|---|
+| `connors_rsi2` | RSI(2) < 10 in SMA-200 uptrend, exit on first up-close | High-vol crypto on daily | ~53% (BTC), 47% (ETH) |
+| `bb_fade` | Lower BB outside, ADX < 25 ranging filter | Range-bound assets | ~71-74% |
+| `keltner_reversion` | Below lower Keltner + RSI(14) < 30 | Indices, daily | **80% (SPY), 79% (QQQ)** ✅ |
+| `williams_mean_rev` | Williams %R < -90 in SMA-200 uptrend | Indices, daily | **78% (SPY/QQQ)** ✅ |
+| `gap_fill` | Daily gap ≥ 0.5% with volume, fade to prior close | Liquid equities | varies |
 
-Each strategy extends `BaseStrategy` in `strategies/base.py`. Add your own by subclassing and registering in `strategies/factory.py`:
+Full report card with Sharpe / DD / trade count per (strategy × asset) in [`internal_docs/trading_presets.md`](internal_docs/trading_presets.md).
 
-```python
-class MyStrategy(BaseStrategy):
-    def analyze(self, df, current_position=None) -> Signal:
-        # your logic
-        return Signal(SignalType.LONG, strength=0.8, reason="my signal")
-```
-
-## Configuration Reference
-
-| Variable | Default | Description |
-|---|---|---|
-| `PRIVATE_KEY` | (required) | Wallet private key, hex, no `0x` prefix |
-| `WALLET_ADDRESS` | (required) | Wallet address |
-| `USE_TESTNET` | `true` | Testnet (recommended while testing) |
-| `DEX` | `''` | HIP-3 dex (`''`, `cash`, `xyz`, …) |
-| `SYMBOL` | `BTC` | Market symbol |
-| `STRATEGY` | `ema_crossover` | Strategy name |
-| `CANDLE_INTERVAL` | `1h` | `1m`, `5m`, `15m`, `1h`, `4h`, `1d` |
-| `POSITION_SIZE_USD` | `100` | Position size |
-| `MAX_LEVERAGE` | `5` | 1–50 |
-| `STOP_LOSS_PCT` | `2.0` | Stop-loss % |
-| `TAKE_PROFIT_PCT` | `4.0` | Take-profit % |
-| `MAX_OPEN_POSITIONS` | `3` | Max concurrent positions |
-| `MAX_DAILY_LOSS_USD` | `500` | Daily loss circuit breaker |
-| `LOOP_INTERVAL_SEC` | `15` | Poll interval |
-| `EMAIL_ENABLED` / `TELEGRAM_ENABLED` | `false` | Notifications toggle |
-| `SLOT_1`..`SLOT_5` | empty | Multi-slot pipe-separated config |
-
-## Project Layout
-
-```
-hyperliquid-bot/
-├── bot.py                    ← CLI single-slot entrypoint
-├── dashboard.py              ← Tkinter desktop dashboard (current UI)
-├── config.py                 ← .env loader + slot parser
-├── core/                     ← exchange + infra (reused in v1 overhaul)
-├── strategies/               ← strategy plugins
-├── gui/                      ← Tkinter tabs (v1 replaces with Tauri)
-├── scripts/                  ← one-off ops utilities
-├── internal_docs/            ← design + planning docs
-├── todo/                     ← phase trackers + backlog
-└── test_setup.py / test_trade.py  ← manual verification scripts
-```
+---
 
 ## Documentation
 
-- [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) — v1.0 architecture + 12-phase roadmap.
-- [`internal_docs/Design.md`](internal_docs/Design.md) — product vision, trading basis, and subsystem overview.
-- [`internal_docs/Changelog.txt`](internal_docs/Changelog.txt) — append-only change log.
-- [`todo/path_to_v1.md`](todo/path_to_v1.md) — phase-by-phase status tracker.
-- [`CLAUDE.md`](CLAUDE.md) — AI-assistant quick reference.
+- **[in-app Tutorial tab](#)** — 12 sections, opens after install
+- [`internal_docs/OVERHAUL_PLAN.md`](internal_docs/OVERHAUL_PLAN.md) — v1.0 architecture + roadmap
+- [`internal_docs/PHASE_5p5_TO_12_PLAN.md`](internal_docs/PHASE_5p5_TO_12_PLAN.md) — phase 5-12 detailed plan
+- [`internal_docs/Design.md`](internal_docs/Design.md) — product vision + subsystem overview
+- [`internal_docs/Changelog.txt`](internal_docs/Changelog.txt) — append-only change log
+- [`internal_docs/trading_presets.md`](internal_docs/trading_presets.md) — backtest report card
+- [`internal_docs/trading_flow_audit.md`](internal_docs/trading_flow_audit.md) — UX audit + gap list
+- [`docs/getting_started.md`](docs/getting_started.md) — user quickstart
+- [`docs/building.md`](docs/building.md) — build pipeline (sidecar + Tauri)
+- [`todo/path_to_v1.md`](todo/path_to_v1.md) — phase tracker
+- [`CLAUDE.md`](CLAUDE.md) — AI-assistant quick reference
 
-## Safety
+---
 
-- **Always test on testnet first.** Hyperliquid testnet has a faucet (`python -m scripts.testnet_faucet`).
-- **Never commit `.env`, private keys, or credentials.** `.env` is in `.gitignore`.
-- **Start small on mainnet.** Position sizing and daily-loss caps exist for a reason — use them.
-- **Review fills regularly.** The audit log (planned in Phase 2) will make this easier.
+## Legacy Python CLI (still works)
+
+The old single-slot CLI loop and Tkinter dashboard are still in the repo and still work — they predate the Tauri app and are useful for debugging or headless server runs:
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env  # fill in PRIVATE_KEY + WALLET_ADDRESS
+python bot.py        # CLI loop
+python dashboard.py  # Tkinter dashboard
+```
+
+The new Tauri app supersedes both for everyday use, but the wallet config is the same — `.env` keys you already have just plug into Sidebar → Vault.
+
+---
 
 ## Troubleshooting
 
-- **"Configuration errors: PRIVATE_KEY must be set"** — copy `.env.example` to `.env` and fill in credentials.
-- **"Failed to get market price"** — check internet and that the symbol exists (use `python discover_markets.py` to list available markets).
-- **"Max positions limit reached"** — bump `MAX_OPEN_POSITIONS` or close existing positions.
-- **Orders not executing** — confirm sufficient balance, correct leverage (Hyperliquid max 50×), correct network (testnet vs mainnet).
-- **HIP-3 symbol not recognized** — HIP-3 symbols require `dex:symbol` format (e.g. `xyz:TSLA`). Set `DEX=xyz` in `.env`.
+| Symptom | Likely cause + fix |
+|---|---|
+| App opens, says "backend down" | Wait 15-30 s on first launch (PyInstaller extracts ~400 MB to `%TEMP%`). Subsequent launches are 1-3 s. |
+| 404 on every API call | Old sidecar still holding port 8787. Build #6+ auto-kills zombies; older builds need `taskkill /F /IM backend-sidecar.exe /T` first. |
+| Charts show "no data" for a stock | yfinance backfill is async — give it 10-30 s on first fetch. After that it's cached locally. |
+| FRED Explorer fails | Add a real FRED key in Sidebar → API Keys (the bundled starter key is rate-limited). |
+| SmartScreen blocks the MSI | "More info → Run anyway" — the installer isn't code-signed. Or build it yourself from source. |
+| `boot.log` shows `WinError 10048 / port 8787` | Another sidecar instance is already running. `taskkill /F /IM backend-sidecar.exe`. |
+| Trading orders show "pending" forever | Vault isn't unlocked. Sidebar → Vault → Unlock. |
+
+For anything else, check `%LOCALAPPDATA%\hyperliquid-bot\logs\boot.log` first — it logs every sidecar boot + crash with full stack traces.
+
+---
 
 ## Disclaimer
 
-This bot is for educational and research purposes. Cryptocurrency and equity-perp trading carry significant risk.
+For educational and research use. Crypto and equity-perp trading carry significant risk.
 
-- Test thoroughly on testnet before deploying real funds.
+- Test thoroughly on testnet first.
 - Never invest more than you can afford to lose.
-- Past performance does not guarantee future results.
+- Past performance ≠ future results.
 - The developers are not responsible for any financial losses.
-
-Use at your own risk.
 
 ## License
 

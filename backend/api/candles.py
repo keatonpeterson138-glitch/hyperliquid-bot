@@ -239,9 +239,13 @@ def _to_dt(value) -> datetime:
     return datetime.fromisoformat(str(value))
 
 
-def build_default_backfill_service(*, router: SourceRouter | None = None) -> BackfillService:
+def build_default_backfill_service(
+    *,
+    router: SourceRouter | None = None,
+    credentials=None,
+) -> BackfillService:
     if router is None:
         from backend.tools.backfill import build_default_router
 
-        router = build_default_router()
+        router = build_default_router(credentials=credentials)
     return BackfillService(router)

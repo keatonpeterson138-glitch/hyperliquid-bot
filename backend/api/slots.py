@@ -77,6 +77,28 @@ def create_slot(req: SlotCreate, repo: SlotRepoDep) -> SlotOut:
     return _to_out(slot, repo)
 
 
+# ── Preset library — backtested winners that the user can instantiate
+# in one click. Definitions live in backend.services.preset_slots.
+
+@router.get("/slots/presets")
+def list_presets() -> list[dict[str, Any]]:
+    from backend.services.preset_slots import list_presets as _list
+    return _list()
+
+
+@router.post("/slots/presets/{preset_id}", response_model=SlotOut)
+def instantiate_preset(preset_id: str, repo: SlotRepoDep) -> SlotOut:
+    from backend.models.slot import Slot
+    from backend.services.preset_slots import get_preset
+
+    preset = get_preset(preset_id)
+    if preset is None:
+        raise HTTPException(status_code=404, detail=f"unknown preset: {preset_id}")
+    body = SlotCreate(**preset.slot)
+    slot = repo.create(Slot(id="", **body.model_dump()))
+    return _to_out(slot, repo)
+
+
 @router.get("/slots/{slot_id}", response_model=SlotOut)
 def get_slot(slot_id: str, repo: SlotRepoDep) -> SlotOut:
     slot = repo.get(slot_id)

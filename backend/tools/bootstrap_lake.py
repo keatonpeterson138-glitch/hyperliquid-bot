@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from backend.db.app_db import AppDB
+from backend.db.paths import DEFAULT_DATA_ROOT
 from backend.services.universe_manager import UniverseManager
 
 logger = logging.getLogger(__name__)
@@ -194,7 +195,7 @@ def _default_backfill_fn(*, symbol: str, interval: str, from_ts: datetime, to_ts
         interval=interval,
         from_ts=from_ts,
         to_ts=to_ts,
-        data_root=Path("data"),
+        data_root=DEFAULT_DATA_ROOT,
         allow_partial=True,
     )
 
