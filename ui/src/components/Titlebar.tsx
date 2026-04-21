@@ -35,11 +35,17 @@ export function Titlebar() {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    health.get().then(() => setBackendOk(true)).catch(() => setBackendOk(false));
-    ks.status().then(setKillStatus).catch(() => undefined);
-    const id = setInterval(() => {
-      ks.status().then(setKillStatus).catch(() => undefined);
-    }, 5_000);
+    // Poll health every 3s — sidecar cold-start is 5-15s, so a single
+    // mount-time check almost always lands while it's still warming up
+    // and falsely flags "backend down" forever. Periodic poll lets the
+    // dot flip back to green the moment the sidecar answers.
+    const pollHealth = () =>
+      health.get().then(() => setBackendOk(true)).catch(() => setBackendOk(false));
+    const pollKs = () => ks.status().then(setKillStatus).catch(() => undefined);
+
+    pollHealth();
+    pollKs();
+    const id = setInterval(() => { pollHealth(); pollKs(); }, 3_000);
     return () => clearInterval(id);
   }, []);
 

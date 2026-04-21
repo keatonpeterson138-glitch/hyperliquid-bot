@@ -798,3 +798,70 @@ select, input {
 .badge--neg { color: var(--err); border-color: var(--err); }
 
 .form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── Searchable combobox (SymbolCombobox) ─────────────────────────── */
+.combo {
+  position: relative;
+  display: inline-block;
+  min-width: 0;
+  width: 100%;
+}
+.combo__input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+.combo__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.combo__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.combo__group {
+  padding: 4px 8px 2px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.combo__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-size: 12px;
+  padding: 5px 8px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 3px;
+}
+.combo__item--hi { background: var(--surface-2); }
+.combo__item--sel { color: var(--accent); font-weight: 600; }
+.combo__item-value { font-variant-numeric: tabular-nums; }
+.combo__item-meta { color: var(--fg-dim); font-size: 11px; }
+.combo__empty { padding: 8px 10px; }
+
+/* tiles use a narrower input footprint */
+.chart-tile__sym .combo__input { min-width: 92px; padding: 3px 6px; font-size: 11px; }
+.chart-tile__sym .combo__menu { max-height: 240px; }

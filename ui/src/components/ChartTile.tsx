@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CandleChart, type ChartCoords, type OverlaySeries } from "./CandleChart";
 import { MarkupLayer } from "./MarkupLayer";
+import { SymbolCombobox } from "./SymbolCombobox";
 import { candles } from "../api/endpoints";
 import { useHyperliquidCandles } from "../hooks/useHyperliquidCandles";
 import type { CandlesResponse } from "../api/types";
@@ -258,15 +259,13 @@ export function ChartTile({
   return (
     <div className="chart-tile">
       <div className="chart-tile__toolbar" ref={toolbarRef}>
-        <select
+        <SymbolCombobox
           className="chart-tile__sym"
           value={symbol}
-          onChange={(e) => onSymbolChange?.(e.target.value)}
-        >
-          {symOptions.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+          onChange={(s) => onSymbolChange?.(s)}
+          options={symOptions}
+          placeholder="Symbol"
+        />
         <select
           className="chart-tile__iv"
           value={interval}
@@ -338,29 +337,16 @@ export function ChartTile({
                 Add another symbol — rendered as a line normalized to 100 at the first bar.
               </div>
               <div className="chart-tile__menu-row">
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) addOverlay(e.target.value);
-                    (e.target as HTMLSelectElement).value = "";
-                  }}
-                >
-                  <option value="">+ Add from catalog…</option>
-                  {symOptions
-                    .filter((s) => s !== symbol && !overlays.includes(s))
-                    .slice(0, 50)
-                    .map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <input
-                  type="text"
+                <SymbolCombobox
                   value={overlayInput}
-                  onChange={(e) => setOverlayInput(e.target.value)}
-                  placeholder="or type e.g. SPY / DGS10 / BTC"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addOverlay(overlayInput);
-                  }}
+                  onChange={(s) => addOverlay(s)}
+                  options={symOptions.filter((s) => s !== symbol && !overlays.includes(s))}
+                  placeholder="Type a symbol to add (SPY, DGS10, BTC…)"
+                  allowFreeText
                 />
-                <button onClick={() => addOverlay(overlayInput)}>Add</button>
+                <button onClick={() => addOverlay(overlayInput)} disabled={!overlayInput.trim()}>
+                  Add
+                </button>
               </div>
               {overlays.length === 0 ? (
                 <div className="muted small">No overlays.</div>

@@ -294,3 +294,31 @@ Closing-the-loop push: backtested preset library, live HL wallet wiring (reuses 
 - Chart-markup → order-ticket wiring — design in audit doc.
 - macOS / Linux installer matrix — only Windows MSI shipping today.
 
+
+## 2026-04-20 (very late) — Searchable comboboxes + Titlebar polling fix
+
+### Summary
+Two papercut fixes that made the app feel broken: scrolling through a 100-item
+crypto dropdown was painful, and the "backend down" indicator was sticky from
+a one-shot mount-time health check.
+
+### UI
+- `ui/src/components/SymbolCombobox.tsx` — new zero-dep searchable combobox.
+  Type to filter (case-insensitive substring), Up/Down arrows + Enter to
+  pick, Esc cancels, click-outside closes. Optional groups + free-text
+  commit. Used in:
+    * QuickTradePanel — Symbol picker (Dashboard)
+    * ChartTile — Symbol picker + Overlay add (Charts)
+    * SlotsPage New-slot form — Symbol + Strategy pickers
+- `ui/src/components/Titlebar.tsx` — health check now polls every 3s
+  instead of firing once on mount. Cold-start "backend down" no longer
+  sticks once the sidecar comes up.
+- `ui/src/pages/SlotsPage.tsx` — strategy dropdown was hardcoded to 3 of
+  the 8 strategies; combobox now exposes all of them with readable labels.
+  Interval list expanded to 1m–1w.
+
+### Build pipeline
+- `scripts/sync_to_windows.sh` — excluded `.git/` from rsync. Loose
+  packed-objects are read-only on the Windows mirror after gc, which made
+  rsync fail with EACCES on rerun and aborted the build before it ran.
+

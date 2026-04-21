@@ -39,7 +39,10 @@ mkdir -p "$DEST"
 
 # Excludes — anything build-generated or platform-specific.
 EXCLUDES=(
-  --exclude='.git/objects/pack/'
+  # Skip the entire git tree — the Windows side never runs git operations
+  # and packed-loose objects often arrive read-only, which makes rsync fail
+  # with EACCES on rerun.
+  --exclude='.git/'
   --exclude='.venv/'
   --exclude='__pycache__/'
   --exclude='.pytest_cache/'

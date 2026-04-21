@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { slots as slotsApi, type PresetSlot } from "../api/endpoints";
+import { markets as marketsApi, slots as slotsApi, type PresetSlot } from "../api/endpoints";
+import { SymbolCombobox } from "../components/SymbolCombobox";
 import type { Slot } from "../api/types";
+
+const STOCK_SYMBOLS = ["AAPL","MSFT","GOOGL","AMZN","META","TSLA","NVDA","AMD","INTC","NFLX","COIN","MSTR","HOOD","PLTR","TSM","SPY","QQQ","DIA","IWM","GLD","SLV","USO"];
+const HIP3_PERPS = ["xyz:SP500","xyz:XYZ100","cash:GOLD","cash:SILVER","cash:OIL","cash:CORN","cash:WHEAT"];
+const FRED_SERIES = ["DFF","DGS10","DGS2","T10Y2Y","DFII10","T10YIE","T5YIFR","CPIAUCSL","CPILFESL","UNRATE","PAYEMS","ICSA","GDPC1","INDPRO","UMCSENT","VIXCLS","DTWEXBGS","WALCL","M2SL","RRPONTSYD"];
+const STRATEGY_OPTIONS = [
+  { value: "ema_crossover",      label: "EMA Crossover" },
+  { value: "rsi_mean_reversion", label: "RSI Mean Reversion" },
+  { value: "breakout",           label: "Breakout" },
+  { value: "connors_rsi2",       label: "Connors RSI(2)" },
+  { value: "bb_fade",            label: "Bollinger Band Fade" },
+  { value: "keltner_reversion",  label: "Keltner Reversion" },
+  { value: "williams_mean_rev",  label: "Williams %R Mean-Rev" },
+  { value: "gap_fill",           label: "Gap Fill" },
+];
 
 export function SlotsPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -164,6 +179,22 @@ function NewSlotForm({ onCreated }: { onCreated: () => void }) {
   const [stopLoss, setStopLoss] = useState(2);
   const [takeProfit, setTakeProfit] = useState(4);
   const [busy, setBusy] = useState(false);
+  const [symbolCatalog, setSymbolCatalog] = useState<string[]>([]);
+
+  // Hyperliquid universe (live) + curated stocks/HIP-3/FRED so the combobox
+  // can search across every chartable / tradable symbol.
+  useEffect(() => {
+    marketsApi.meta().then((r) => {
+      const raw = r.raw as { universe?: Array<{ name?: string }> };
+      const hl = (raw.universe ?? []).map((u) => u.name).filter((n): n is string => !!n);
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const s of [...hl, ...STOCK_SYMBOLS, ...HIP3_PERPS, ...FRED_SERIES]) {
+        if (!seen.has(s)) { seen.add(s); out.push(s); }
+      }
+      setSymbolCatalog(out);
+    }).catch(() => setSymbolCatalog([...STOCK_SYMBOLS, ...HIP3_PERPS, ...FRED_SERIES]));
+  }, []);
 
   const submit = async () => {
     setBusy(true);
@@ -190,24 +221,34 @@ function NewSlotForm({ onCreated }: { onCreated: () => void }) {
       <div className="form-grid">
         <label className="field">
           <span>Symbol</span>
-          <input value={symbol} onChange={(e) => setSymbol(e.target.value)} />
+          <SymbolCombobox
+            value={symbol}
+            onChange={(s) => setSymbol(s)}
+            options={symbolCatalog}
+            placeholder="Type to search…"
+          />
         </label>
         <label className="field">
           <span>Strategy</span>
-          <select value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-            <option value="ema_crossover">EMA Crossover</option>
-            <option value="rsi_mean_reversion">RSI Mean Reversion</option>
-            <option value="breakout">Breakout</option>
-          </select>
+          <SymbolCombobox
+            value={strategy}
+            onChange={(s) => setStrategy(s)}
+            options={STRATEGY_OPTIONS}
+            placeholder="Pick a strategy"
+            allowFreeText={false}
+          />
         </label>
         <label className="field">
           <span>Interval</span>
           <select value={interval} onChange={(e) => setInterval(e.target.value)}>
+            <option value="1m">1m</option>
             <option value="5m">5m</option>
             <option value="15m">15m</option>
+            <option value="30m">30m</option>
             <option value="1h">1h</option>
             <option value="4h">4h</option>
             <option value="1d">1d</option>
+            <option value="1w">1w</option>
           </select>
         </label>
         <label className="field">

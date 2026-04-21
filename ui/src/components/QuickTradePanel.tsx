@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { markets as marketsApi, orders as ordersApi } from "../api/endpoints";
+import { SymbolCombobox } from "./SymbolCombobox";
 
 const PRESET_SYMBOLS = ["BTC", "ETH", "SOL", "HYPE", "AVAX", "ARB", "DOGE", "LINK"];
 
@@ -132,9 +133,12 @@ export function QuickTradePanel({ defaultSymbol = "BTC", onPlaced, compact = fal
       <div className="quick-trade__row">
         <label className="field">
           <span>Symbol</span>
-          <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-            {symbolCatalog.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SymbolCombobox
+            value={symbol}
+            onChange={(s) => setSymbol(s.toUpperCase())}
+            options={symbolCatalog}
+            placeholder="Type to search…"
+          />
         </label>
 
         <div className="quick-trade__side">
